@@ -73,7 +73,8 @@ class HomeScreen extends ConsumerWidget {
           if (todayClasses.isNotEmpty) ...[
             SectionHeader('Today · ${dayNames[today - 1]}', action: 'Timetable', onAction: () => context.go('/timetable')),
             SizedBox(
-              height: 96,
+              // Grows with the student's text-size setting so nothing is cut off.
+              height: 120 * MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 2.0),
               child: ListView.separated(
                 scrollDirection: Axis.horizontal,
                 itemCount: todayClasses.length,
@@ -117,7 +118,8 @@ class HomeScreen extends ConsumerWidget {
             physics: const NeverScrollableScrollPhysics(),
             mainAxisSpacing: 12,
             crossAxisSpacing: 12,
-            childAspectRatio: 1.05,
+            // Tiles get taller as the student's text size grows (never cut off).
+            childAspectRatio: 1.05 / MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 1.8),
             children: [
               FeatureTile(icon: Icons.campaign_rounded, title: 'Announcements', subtitle: 'Official notices, filtered for you', gradient: Brand.primaryGradient, onTap: () => context.go('/announcements')),
               FeatureTile(icon: Icons.map_rounded, title: 'Help directory', subtitle: 'Every office, what it does, where it is', gradient: Brand.oceanGradient, onTap: () => context.go('/directory')),
