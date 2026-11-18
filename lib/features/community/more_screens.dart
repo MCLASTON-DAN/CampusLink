@@ -122,11 +122,15 @@ class LostFoundScreen extends ConsumerWidget {
                 ),
                 for (final i in list)
                   Card(
-                    child: ListTile(
+                    child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    ListTile(
                       title: Text(i.title),
                       subtitle: Text('${i.description}\nFound: ${i.foundWhere}\nKept at: ${i.storedAt}'),
                       isThreeLine: true,
-                      trailing: i.status != 'held'
+                    ),
+                    Padding(
+                      padding: const EdgeInsets.fromLTRB(16, 0, 16, 10),
+                      child: i.status != 'held'
                           ? const StatusChip('Returned', color: Colors.green)
                           : i.myClaimStatus != null
                               ? StatusChip('Claim ${i.myClaimStatus}', color: Colors.orange)
@@ -141,6 +145,7 @@ class LostFoundScreen extends ConsumerWidget {
                                       },
                                       child: const Text('This is mine')),
                     ),
+                    ]),
                   ),
               ]),
       ),
@@ -368,7 +373,8 @@ class _CreateSurveyState extends ConsumerState<CreateSurveyScreen> {
               child: Column(children: [
                 TextField(controller: _qs[i].$1, decoration: InputDecoration(labelText: 'Question ${i + 1}')),
                 DropdownButtonFormField<String>(
-                  initialValue: _qs[i].$3,
+                  isExpanded: true,
+            initialValue: _qs[i].$3,
                   items: const [
                     DropdownMenuItem(value: 'single', child: Text('Pick one')),
                     DropdownMenuItem(value: 'multi', child: Text('Pick many')),
@@ -434,9 +440,8 @@ class TutorsScreen extends ConsumerWidget {
               child: Padding(
                 padding: const EdgeInsets.all(14),
                 child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Row(children: [
-                    Flexible(child: NameWithBadge(t.name, t.verified ? 'blue' : null, style: Theme.of(context).textTheme.titleMedium)),
-                    const Spacer(),
+                  Wrap(spacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                    NameWithBadge(t.name, t.verified ? 'blue' : null, style: Theme.of(context).textTheme.titleMedium),
                     if (t.reviews > 0) Text('★ ${t.score.toStringAsFixed(2)}  (${t.reviews})', style: const TextStyle(fontWeight: FontWeight.w700)) else const Text('No reviews yet'),
                   ]),
                   if (t.bio.isNotEmpty) Text(t.bio),
@@ -448,6 +453,7 @@ class TutorsScreen extends ConsumerWidget {
                       contentPadding: EdgeInsets.zero,
                       title: Text('${m.courseCode}${m.courseName == null ? '' : ' · ${m.courseName}'}'),
                       subtitle: Text('UGX ${fmt.format(m.priceUgx)} per hour${m.grade == null ? '' : ' · grade ${m.grade}'}'),
+                      isThreeLine: true,
                       trailing: TextButton(
                         onPressed: () async {
                           final msg = await _prompt(context, 'Message to ${t.name}', min: 5, hint: 'When are you free? What do you need help with?');
@@ -682,7 +688,8 @@ class _MembersState extends ConsumerState<MembersScreen> {
       ),
       body: ListView(padding: const EdgeInsets.all(12), children: [
         DropdownButtonFormField<String>(
-          initialValue: _pub,
+          isExpanded: true,
+            initialValue: _pub,
           decoration: const InputDecoration(labelText: 'Office'),
           items: [for (final p in allowed) DropdownMenuItem(value: p.id, child: Text(p.name))],
           onChanged: (v) => setState(() {
@@ -732,7 +739,8 @@ class _MembersState extends ConsumerState<MembersScreen> {
               TextField(controller: num, decoration: const InputDecoration(labelText: 'Student number')),
               TextField(controller: title, decoration: const InputDecoration(labelText: 'Position, e.g. Minister of ICT')),
               DropdownButtonFormField<int>(
-                initialValue: months,
+                isExpanded: true,
+            initialValue: months,
                 decoration: const InputDecoration(labelText: 'Term'),
                 items: [for (final m in [3, 6, 9, 12]) DropdownMenuItem(value: m, child: Text('$m months'))],
                 onChanged: (v) => set(() => months = v ?? 12),

@@ -248,6 +248,7 @@ class _ComposeEventState extends ConsumerState<ComposeEventScreen> {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (mems.length > 1)
           DropdownButtonFormField<Membership>(
+            isExpanded: true,
             initialValue: _mem,
             decoration: const InputDecoration(labelText: 'Posting as'),
             items: [for (final m in mems) DropdownMenuItem(value: m, child: Text('${m.positionTitle} · ${m.publisherName}'))],
@@ -352,9 +353,8 @@ class MajorRequestsScreen extends ConsumerWidget {
                         const SizedBox(height: 6),
                         Text('Reason: ${e.majorReason ?? '-'}'),
                         const SizedBox(height: 8),
-                        Row(children: [
+                        Wrap(spacing: 8, children: [
                           FilledButton(onPressed: () => decide(e, 'approved'), child: const Text('Approve')),
-                          const SizedBox(width: 8),
                           OutlinedButton(onPressed: () => decide(e, 'rejected'), child: const Text('Reject')),
                         ]),
                       ]),

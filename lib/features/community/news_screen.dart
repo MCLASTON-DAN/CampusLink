@@ -424,6 +424,7 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
       body: ListView(padding: const EdgeInsets.all(16), children: [
         if (mems.length > 1)
           DropdownButtonFormField<Membership>(
+            isExpanded: true,
             value: _mem,
             decoration: const InputDecoration(labelText: 'Posting as'),
             items: [for (final m in mems) DropdownMenuItem(value: m, child: Text('${m.positionTitle} · ${m.publisherName}'))],
@@ -437,7 +438,8 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
               subtitle: Text('${_mem!.publisherName} · ${_mem!.daysLeft} days left in your term')),
         const SizedBox(height: 8),
         DropdownButtonFormField<String>(
-          value: _kind,
+          isExpanded: true,
+            value: _kind,
           decoration: const InputDecoration(labelText: 'Type'),
           items: [for (final k in kinds) DropdownMenuItem(value: k, child: Text(Post.kindLabels[k] ?? k))],
           onChanged: (v) => setState(() => _kind = v ?? 'news'),
