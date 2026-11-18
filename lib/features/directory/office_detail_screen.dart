@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import '../community/map_screen.dart';
 import '../requests/new_request_sheet.dart';
 
 class OfficeDetailScreen extends ConsumerWidget {
@@ -43,6 +44,21 @@ class OfficeDetailScreen extends ConsumerWidget {
                   ],
                 ),
               ),
+              const SizedBox(height: 12),
+              Wrap(spacing: 8, children: [
+                FilledButton.tonalIcon(
+                    onPressed: () => showOfficeSheet(context, o),
+                    icon: const Icon(Icons.info_outline),
+                    label: const Text('Hours, what to bring, directions')),
+                if (ref.watch(currentUserProvider).valueOrNull?.isStaff ?? false)
+                  OutlinedButton.icon(
+                      onPressed: () async {
+                        await context.push('/directory/${o.id}/edit');
+                        ref.invalidate(officesProvider);
+                      },
+                      icon: const Icon(Icons.edit),
+                      label: const Text('Edit (staff)')),
+              ]),
               const SizedBox(height: 16),
               Card(
                 child: Column(

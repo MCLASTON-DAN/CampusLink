@@ -4,6 +4,7 @@ import 'package:campuslink/features/community/events_screens.dart';
 import 'package:campuslink/features/community/map_screen.dart';
 import 'package:campuslink/features/community/more_screens.dart';
 import 'package:campuslink/features/community/news_screen.dart';
+import 'package:campuslink/features/community/office_edit.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -27,6 +28,8 @@ void main() {
     'removal log': () => const ModerationLogScreen(),
     'reports': () => const ReportsScreen(),
     'members': () => const MembersScreen(),
+    'campuses': () => const CampusesScreen(),
+    'edit office': () => const OfficeEditScreen(officeId: 'off-registrar'),
   };
 
   for (final email in ['super@x.ug', 'guild@x.ug', 'student@x.ug']) {

@@ -12,6 +12,7 @@ import 'features/community/events_screens.dart';
 import 'features/community/map_screen.dart';
 import 'features/community/more_screens.dart';
 import 'features/community/news_screen.dart';
+import 'features/community/office_edit.dart';
 import 'features/directory/directory_screen.dart';
 import 'features/directory/office_detail_screen.dart';
 import 'features/engage/engage_screen.dart';
@@ -55,6 +56,9 @@ final routerProvider = Provider<GoRouter>((ref) {
               GoRoute(
                 path: ':id',
                 builder: (_, s) => OfficeDetailScreen(officeId: s.pathParameters['id']!),
+                routes: [
+                  GoRoute(path: 'edit', builder: (_, s) => OfficeEditScreen(officeId: s.pathParameters['id']!)),
+                ],
               ),
             ],
           ),
@@ -94,6 +98,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/tutors/profile', builder: (_, __) => const TutorProfileEditScreen()),
           GoRoute(path: '/moderation', builder: (_, __) => const ModerationLogScreen()),
           GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
+          GoRoute(path: '/campuses', builder: (_, __) => const CampusesScreen()),
           GoRoute(path: '/members', builder: (_, __) => const MembersScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
         ],

@@ -1,3 +1,4 @@
+import 'package:campuslink/data/community_models.dart';
 import 'package:campuslink/data/community_repository.dart';
 import 'package:campuslink/data/local_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -94,5 +95,20 @@ void main() {
     await r.community.requestTutor(tutorId: t.tutorId, courseCode: t.modules.first.courseCode, message: 'help please');
     final req = (await r.community.myTutorRequests()).first;
     await fails(r.community.reviewTutor(requestId: req.id, rating: 5));
+  });
+
+  test('office edits need a source; students cannot edit; campus saves', () async {
+    final r = await repoAs('admin@x.ug');
+    final o = (await r.offices()).first;
+    await fails(r.community.saveOffice(o.copyWith(directions: 'Turn left', source: '')));
+    await r.community.saveOffice(o.copyWith(directions: 'Turn left', lat: 0.3, lng: 32.5, source: 'Registrar, in person'));
+    final back = (await r.offices()).firstWhere((x) => x.id == o.id);
+    expect(back.hasLocation, isTrue);
+    expect(back.isVerified, isTrue);
+    await r.community.saveCampus(const Campus(id: 'new-1', name: 'Main', lat: 0.3, lng: 32.5));
+    expect((await r.community.campuses()).any((c) => c.name == 'Main'), isTrue);
+    await r.signOut();
+    await r.signIn(email: 'student@x.ug', password: 'password1');
+    await fails(r.community.saveOffice(o.copyWith(directions: 'x', source: 'my guess')));
   });
 }

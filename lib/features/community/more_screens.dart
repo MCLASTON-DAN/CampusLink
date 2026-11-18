@@ -55,6 +55,7 @@ class CommunityHubScreen extends ConsumerWidget {
         tile(Icons.newspaper_rounded, 'Campus news', 'Verified posts and clarifications', '/news'),
         tile(Icons.event_rounded, 'Events', 'Countdowns, speakers, online links', '/events'),
         tile(Icons.map_rounded, 'Campus map', 'Offices, hours, directions', '/map'),
+        tile(Icons.location_city_rounded, 'Campuses', 'Where each campus is', '/campuses'),
         tile(Icons.inventory_2_rounded, 'Lost & found', 'Items held by offices', '/lostfound'),
         tile(Icons.poll_rounded, 'Surveys', 'Anonymous, one answer each', '/surveys'),
         tile(Icons.school_rounded, 'Tutors', 'Fair ratings, real reviews', '/tutors'),
