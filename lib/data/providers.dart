@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'community_models.dart';
+import 'community_repository.dart';
 import 'models.dart';
 import 'repository.dart';
 import 'smart_search.dart';
@@ -64,3 +66,34 @@ final smartSearchProvider =
     clubs: results[4] as List<Club>,
   );
 });
+
+// ---- community ----
+final communityProvider = Provider<CommunityApi>((ref) => ref.watch(repositoryProvider).community);
+
+final postsProvider = FutureProvider.autoDispose.family<List<Post>, String?>(
+    (ref, kind) => ref.watch(communityProvider).posts(kind: kind));
+
+final featuredEventsProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).featuredEvents());
+
+final myMembershipsProvider = FutureProvider.autoDispose((ref) async {
+  ref.watch(currentUserProvider);
+  return ref.watch(communityProvider).myMemberships();
+});
+
+final campusesProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).campuses());
+
+final majorRequestsProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).majorRequests());
+
+final moderationLogProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).moderationLog());
+
+final lostFoundProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).lostFound());
+
+final surveysProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).surveys());
+
+final tutorCardsProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).tutorCards());
+
+final myTutorRequestsProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).myTutorRequests());

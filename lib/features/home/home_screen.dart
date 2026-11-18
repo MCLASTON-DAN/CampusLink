@@ -5,6 +5,7 @@ import 'package:go_router/go_router.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import '../community/events_screens.dart';
 
 class HomeScreen extends ConsumerWidget {
   const HomeScreen({super.key});
@@ -110,6 +111,7 @@ class HomeScreen extends ConsumerWidget {
             const SizedBox(height: 20),
           ],
 
+          const FeaturedEventsBanner(),
           // Features
           const SectionHeader('Everything you need'),
           GridView.count(
@@ -121,6 +123,7 @@ class HomeScreen extends ConsumerWidget {
             // Tiles get taller as the student's text size grows (never cut off).
             childAspectRatio: 1.05 / MediaQuery.textScalerOf(context).scale(1.0).clamp(1.0, 1.8),
             children: [
+              FeatureTile(icon: Icons.forum_rounded, title: 'Community', subtitle: 'News, events, map, lost & found, surveys', gradient: Brand.roseGradient, onTap: () => context.go('/community')),
               FeatureTile(icon: Icons.campaign_rounded, title: 'Announcements', subtitle: 'Official notices, filtered for you', gradient: Brand.primaryGradient, onTap: () => context.go('/announcements')),
               FeatureTile(icon: Icons.map_rounded, title: 'Help directory', subtitle: 'Every office, what it does, where it is', gradient: Brand.oceanGradient, onTap: () => context.go('/directory')),
               FeatureTile(icon: Icons.support_agent_rounded, title: 'Help requests', subtitle: 'Raise a ticket and track its status', gradient: Brand.sunsetGradient, onTap: () => context.go('/requests')),

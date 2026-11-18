@@ -4,6 +4,7 @@ import 'dart:convert';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
+import 'community_local.dart';
 import 'models.dart';
 import 'repository.dart';
 import 'seed_data.dart';
@@ -13,7 +14,11 @@ import 'seed_data.dart';
 class LocalRepository implements CampusRepository {
   LocalRepository(this._prefs) {
     _load();
+    community = LocalCommunity(_prefs, () => _user);
   }
+
+  @override
+  late final LocalCommunity community;
 
   final SharedPreferences _prefs;
   static const _uuid = Uuid();
@@ -106,8 +111,9 @@ class LocalRepository implements CampusRepository {
       faculty: 'FST',
       role: isStaff ? UserRole.staff : UserRole.student,
     );
-    _setUser(p);
-    return _tick(p);
+    final withRole = community.onSignIn(p, email);
+    _setUser(withRole);
+    return _tick(withRole);
   }
 
   @override
@@ -159,7 +165,7 @@ class LocalRepository implements CampusRepository {
 
   // ---- offices ----
   @override
-  Future<List<HelpOffice>> offices() => _tick(SeedData.offices);
+  Future<List<HelpOffice>> offices() => _tick(community.mergeOffices(SeedData.offices));
 
   // ---- requests ----
   @override

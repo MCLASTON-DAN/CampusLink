@@ -8,6 +8,10 @@ import 'data/providers.dart';
 import 'features/announcements/announcements_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/buddy/buddy_screen.dart';
+import 'features/community/events_screens.dart';
+import 'features/community/map_screen.dart';
+import 'features/community/more_screens.dart';
+import 'features/community/news_screen.dart';
 import 'features/directory/directory_screen.dart';
 import 'features/directory/office_detail_screen.dart';
 import 'features/engage/engage_screen.dart';
@@ -70,6 +74,27 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/where', builder: (_, __) => const WhereScreen()),
           GoRoute(path: '/engage', builder: (_, __) => const EngageScreen()),
           GoRoute(path: '/timetable', builder: (_, __) => const TimetableScreen()),
+          GoRoute(path: '/community', builder: (_, __) => const CommunityHubScreen()),
+          GoRoute(path: '/news', builder: (_, __) => const NewsScreen()),
+          GoRoute(path: '/news/new', builder: (_, __) => const ComposePostScreen()),
+          GoRoute(path: '/news/:id', builder: (_, s) => PostDetailScreen(postId: s.pathParameters['id']!)),
+          GoRoute(path: '/events', builder: (_, __) => const EventsListScreen()),
+          GoRoute(path: '/events/new', builder: (_, __) => const ComposeEventScreen()),
+          GoRoute(path: '/events/requests', builder: (_, __) => const MajorRequestsScreen()),
+          GoRoute(path: '/events/:id', builder: (_, s) => EventDetailScreen(eventId: s.pathParameters['id']!)),
+          GoRoute(path: '/map', builder: (_, __) => const CampusMapScreen()),
+          GoRoute(path: '/lostfound', builder: (_, __) => const LostFoundScreen()),
+          GoRoute(path: '/lostfound/:id', builder: (_, s) => ClaimsScreen(itemId: s.pathParameters['id']!)),
+          GoRoute(path: '/surveys', builder: (_, __) => const SurveysScreen()),
+          GoRoute(path: '/surveys/new', builder: (_, __) => const CreateSurveyScreen()),
+          GoRoute(path: '/surveys/:id', builder: (_, s) => TakeSurveyScreen(surveyId: s.pathParameters['id']!)),
+          GoRoute(path: '/surveys/:id/results', builder: (_, s) => SurveyResultsScreen(surveyId: s.pathParameters['id']!)),
+          GoRoute(path: '/tutors', builder: (_, __) => const TutorsScreen()),
+          GoRoute(path: '/tutors/mine', builder: (_, __) => const MyLessonsScreen()),
+          GoRoute(path: '/tutors/profile', builder: (_, __) => const TutorProfileEditScreen()),
+          GoRoute(path: '/moderation', builder: (_, __) => const ModerationLogScreen()),
+          GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
+          GoRoute(path: '/members', builder: (_, __) => const MembersScreen()),
           GoRoute(path: '/profile', builder: (_, __) => const ProfileScreen()),
         ],
       ),

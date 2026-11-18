@@ -1,3 +1,4 @@
+import 'community_repository.dart';
 import 'models.dart';
 
 /// Everything the UI needs from a backend. Two implementations:
@@ -56,4 +57,7 @@ abstract class CampusRepository {
   Future<void> replaceTimetable(List<TimetableEntry> entries);
   Future<void> addTimetableEntry(TimetableEntry e);
   Future<void> deleteTimetableEntry(String id);
+
+  /// News, events, offices, tutors, surveys… (see community_repository.dart)
+  CommunityApi get community;
 }

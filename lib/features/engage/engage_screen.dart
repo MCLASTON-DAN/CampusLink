@@ -31,7 +31,7 @@ class _EngageScreenState extends ConsumerState<EngageScreen> with SingleTickerPr
           controller: _tabs,
           isScrollable: true,
           tabAlignment: TabAlignment.start,
-          tabs: const [Tab(text: 'Events'), Tab(text: 'Clubs'), Tab(text: 'Campus map'), Tab(text: 'Feedback')],
+          tabs: const [Tab(text: 'Events'), Tab(text: 'Clubs'), Tab(text: 'Sample layout (demo)'), Tab(text: 'Feedback')],
         ),
       ),
       body: TabBarView(

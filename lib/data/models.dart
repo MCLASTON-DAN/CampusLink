@@ -1,13 +1,24 @@
 // Plain data models. Each has fromMap/toMap so the same classes work for
 // Supabase rows and for the local JSON store used in demo mode.
 
+import 'community_models.dart';
+
 DateTime _dt(dynamic v) =>
     v == null ? DateTime.now() : (v is DateTime ? v : DateTime.parse(v.toString()));
 
 List<String> _strList(dynamic v) =>
     v == null ? const [] : List<String>.from((v as List).map((e) => e.toString()));
 
-enum UserRole { student, staff, admin }
+enum UserRole { student, staff, admin, superAdmin }
+
+extension UserRoleX on UserRole {
+  /// The word stored in the database ("super_admin" has an underscore).
+  String get dbName => this == UserRole.superAdmin ? 'super_admin' : name;
+  static UserRole parse(String? v) {
+    if (v == 'super_admin') return UserRole.superAdmin;
+    return UserRole.values.firstWhere((r) => r.name == v, orElse: () => UserRole.student);
+  }
+}
 
 class Profile {
   final String id;
@@ -20,6 +31,10 @@ class Profile {
   final bool isTutor;
   final List<String> tutorSubjects;
   final bool isBuddyMentor;
+  final bool tutorVerified; // earned from reviews, never set by hand
+  final String? officeTitle; // e.g. "Minister of ICT" while in office
+  final String? officeName; // e.g. "Guild Office"
+  final String? badge; // 'red' | 'green' | 'blue' | null
 
   const Profile({
     required this.id,
@@ -32,9 +47,14 @@ class Profile {
     this.isTutor = false,
     this.tutorSubjects = const [],
     this.isBuddyMentor = false,
+    this.tutorVerified = false,
+    this.officeTitle,
+    this.officeName,
+    this.badge,
   });
 
   bool get isStaff => role != UserRole.student;
+  bool get isSuperAdmin => role == UserRole.superAdmin;
   bool get isFirstYear => yearOfStudy == 1;
 
   Profile copyWith({
@@ -47,6 +67,10 @@ class Profile {
     bool? isTutor,
     List<String>? tutorSubjects,
     bool? isBuddyMentor,
+    bool? tutorVerified,
+    String? officeTitle,
+    String? officeName,
+    String? badge,
   }) =>
       Profile(
         id: id,
@@ -59,6 +83,10 @@ class Profile {
         isTutor: isTutor ?? this.isTutor,
         tutorSubjects: tutorSubjects ?? this.tutorSubjects,
         isBuddyMentor: isBuddyMentor ?? this.isBuddyMentor,
+        tutorVerified: tutorVerified ?? this.tutorVerified,
+        officeTitle: officeTitle ?? this.officeTitle,
+        officeName: officeName ?? this.officeName,
+        badge: badge ?? this.badge,
       );
 
   factory Profile.fromMap(Map<String, dynamic> m) => Profile(
@@ -68,11 +96,14 @@ class Profile {
         programme: m['programme'],
         yearOfStudy: m['year_of_study'],
         faculty: m['faculty'],
-        role: UserRole.values.firstWhere((r) => r.name == (m['role'] ?? 'student'),
-            orElse: () => UserRole.student),
+        role: UserRoleX.parse(m['role']),
         isTutor: m['is_tutor'] ?? false,
         tutorSubjects: _strList(m['tutor_subjects']),
         isBuddyMentor: m['is_buddy_mentor'] ?? false,
+        tutorVerified: m['tutor_verified'] ?? false,
+        officeTitle: m['office_title'],
+        officeName: m['office_name'],
+        badge: m['badge'],
       );
 
   Map<String, dynamic> toMap() => {
@@ -82,10 +113,14 @@ class Profile {
         'programme': programme,
         'year_of_study': yearOfStudy,
         'faculty': faculty,
-        'role': role.name,
+        'role': role.dbName,
         'is_tutor': isTutor,
         'tutor_subjects': tutorSubjects,
         'is_buddy_mentor': isBuddyMentor,
+        'tutor_verified': tutorVerified,
+        'office_title': officeTitle,
+        'office_name': officeName,
+        'badge': badge,
       };
 }
 
@@ -138,8 +173,20 @@ class HelpOffice {
   final String? building;
   final String? contactEmail;
   final String? contactPhone;
-  final String? openHours;
+  final String? openHours; // plain text, e.g. "Mon–Fri 8:00–17:00"
   final List<String> keywords;
+
+  // Real, administration-confirmed details (empty until entered):
+  final List<String> whatWeDo;
+  final List<String> whatWeDont;
+  final List<String> bring; // what you must bring to be served
+  final List<Map<String, dynamic>> hours; // [{"days":[1,2,3,4,5],"open":"08:00","close":"17:00"}]
+  final String? directions; // step by step from the main entrance
+  final String? source; // which document or person confirmed this
+  final DateTime? lastVerifiedAt;
+  final String? campusId;
+  final double? lat;
+  final double? lng;
 
   const HelpOffice({
     required this.id,
@@ -152,7 +199,58 @@ class HelpOffice {
     this.contactPhone,
     this.openHours,
     this.keywords = const [],
+    this.whatWeDo = const [],
+    this.whatWeDont = const [],
+    this.bring = const [],
+    this.hours = const [],
+    this.directions,
+    this.source,
+    this.lastVerifiedAt,
+    this.campusId,
+    this.lat,
+    this.lng,
   });
+
+  bool get hasLocation => lat != null && lng != null;
+  bool get isVerified => lastVerifiedAt != null;
+
+  HelpOffice copyWith({
+    String? description,
+    String? location,
+    String? openHours,
+    List<String>? whatWeDo,
+    List<String>? whatWeDont,
+    List<String>? bring,
+    List<Map<String, dynamic>>? hours,
+    String? directions,
+    String? source,
+    String? campusId,
+    double? lat,
+    double? lng,
+    DateTime? lastVerifiedAt,
+  }) =>
+      HelpOffice(
+        id: id,
+        name: name,
+        description: description ?? this.description,
+        category: category,
+        location: location ?? this.location,
+        building: building,
+        contactEmail: contactEmail,
+        contactPhone: contactPhone,
+        openHours: openHours ?? this.openHours,
+        keywords: keywords,
+        whatWeDo: whatWeDo ?? this.whatWeDo,
+        whatWeDont: whatWeDont ?? this.whatWeDont,
+        bring: bring ?? this.bring,
+        hours: hours ?? this.hours,
+        directions: directions ?? this.directions,
+        source: source ?? this.source,
+        lastVerifiedAt: lastVerifiedAt ?? this.lastVerifiedAt,
+        campusId: campusId ?? this.campusId,
+        lat: lat ?? this.lat,
+        lng: lng ?? this.lng,
+      );
 
   factory HelpOffice.fromMap(Map<String, dynamic> m) => HelpOffice(
         id: m['id'],
@@ -165,6 +263,16 @@ class HelpOffice {
         contactPhone: m['contact_phone'],
         openHours: m['open_hours'],
         keywords: _strList(m['keywords']),
+        whatWeDo: _strList(m['what_we_do']),
+        whatWeDont: _strList(m['what_we_dont']),
+        bring: _strList(m['bring']),
+        hours: ((m['hours'] as List?) ?? const []).map((e) => Map<String, dynamic>.from(e)).toList(),
+        directions: m['directions'],
+        source: m['source'],
+        lastVerifiedAt: m['last_verified_at'] == null ? null : _dt(m['last_verified_at']),
+        campusId: m['campus_id'],
+        lat: (m['lat'] as num?)?.toDouble(),
+        lng: (m['lng'] as num?)?.toDouble(),
       );
 
   Map<String, dynamic> toMap() => {
@@ -178,6 +286,16 @@ class HelpOffice {
         'contact_phone': contactPhone,
         'open_hours': openHours,
         'keywords': keywords,
+        'what_we_do': whatWeDo,
+        'what_we_dont': whatWeDont,
+        'bring': bring,
+        'hours': hours,
+        'directions': directions,
+        'source': source,
+        'last_verified_at': lastVerifiedAt?.toIso8601String(),
+        'campus_id': campusId,
+        'lat': lat,
+        'lng': lng,
       };
 }
 
@@ -449,6 +567,21 @@ class CampusEvent {
   final String? location;
   final String? organiser;
 
+  final String? publisherId;
+  final String publisherName;
+  final String publisherKind;
+  final String? createdBy;
+  final String? topic; // what the event is about
+  final String? impact; // how students benefit
+  final String? onlineUrl; // meeting link
+  final String status; // draft | published | removed
+  final String majorStatus; // none | requested | approved | rejected
+  final String? majorReason;
+  final List<EventSpeaker> speakers;
+  final int likes;
+  final int comments;
+  final bool likedByMe;
+
   const CampusEvent({
     required this.id,
     required this.title,
@@ -457,7 +590,63 @@ class CampusEvent {
     this.endsAt,
     this.location,
     this.organiser,
+    this.publisherId,
+    this.publisherName = '',
+    this.publisherKind = 'guild',
+    this.createdBy,
+    this.topic,
+    this.impact,
+    this.onlineUrl,
+    this.status = 'published',
+    this.majorStatus = 'none',
+    this.majorReason,
+    this.speakers = const [],
+    this.likes = 0,
+    this.comments = 0,
+    this.likedByMe = false,
   });
+
+  String? get badge => badgeForKind(publisherKind);
+  bool get isMajor => majorStatus == 'approved';
+
+  /// Home screen pop-up window: from 24 hours before the start until it ends.
+  bool isFeaturedAt(DateTime now) {
+    if (!isMajor || status != 'published') return false;
+    final end = endsAt ?? startsAt.add(const Duration(hours: 3));
+    return !now.isBefore(startsAt.subtract(const Duration(hours: 24))) && now.isBefore(end);
+  }
+
+  CampusEvent copyWith({
+    String? majorStatus,
+    List<EventSpeaker>? speakers,
+    int? likes,
+    int? comments,
+    bool? likedByMe,
+    String? status,
+  }) =>
+      CampusEvent(
+        id: id,
+        title: title,
+        description: description,
+        startsAt: startsAt,
+        endsAt: endsAt,
+        location: location,
+        organiser: organiser,
+        publisherId: publisherId,
+        publisherName: publisherName,
+        publisherKind: publisherKind,
+        createdBy: createdBy,
+        topic: topic,
+        impact: impact,
+        onlineUrl: onlineUrl,
+        status: status ?? this.status,
+        majorStatus: majorStatus ?? this.majorStatus,
+        majorReason: majorReason,
+        speakers: speakers ?? this.speakers,
+        likes: likes ?? this.likes,
+        comments: comments ?? this.comments,
+        likedByMe: likedByMe ?? this.likedByMe,
+      );
 
   factory CampusEvent.fromMap(Map<String, dynamic> m) => CampusEvent(
         id: m['id'],
@@ -467,6 +656,22 @@ class CampusEvent {
         endsAt: m['ends_at'] == null ? null : _dt(m['ends_at']),
         location: m['location'],
         organiser: m['organiser'],
+        publisherId: m['publisher_id'],
+        publisherName: m['publisher_name'] ?? (m['organiser'] ?? ''),
+        publisherKind: m['publisher_kind'] ?? 'guild',
+        createdBy: m['created_by'],
+        topic: m['topic'],
+        impact: m['impact'],
+        onlineUrl: m['online_url'],
+        status: m['status'] ?? 'published',
+        majorStatus: m['major_status'] ?? 'none',
+        majorReason: m['major_reason'],
+        speakers: ((m['speakers'] as List?) ?? const [])
+            .map((e) => EventSpeaker.fromMap(Map<String, dynamic>.from(e)))
+            .toList(),
+        likes: (m['likes'] ?? 0) as int,
+        comments: (m['comments'] ?? 0) as int,
+        likedByMe: m['liked_by_me'] ?? false,
       );
 
   Map<String, dynamic> toMap() => {
@@ -477,6 +682,17 @@ class CampusEvent {
         'ends_at': endsAt?.toIso8601String(),
         'location': location,
         'organiser': organiser,
+        'publisher_id': publisherId,
+        'publisher_name': publisherName,
+        'publisher_kind': publisherKind,
+        'created_by': createdBy,
+        'topic': topic,
+        'impact': impact,
+        'online_url': onlineUrl,
+        'status': status,
+        'major_status': majorStatus,
+        'major_reason': majorReason,
+        'speakers': speakers.map((e) => e.toMap()).toList(),
       };
 }
 

@@ -4,17 +4,22 @@ import 'dart:convert';
 import 'package:crypto/crypto.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'community_repository.dart';
+import 'community_supabase.dart';
 import 'models.dart';
 import 'repository.dart';
 
 /// Live backend. Table/column names match supabase/migrations/0001_*.sql.
 class SupabaseRepository implements CampusRepository {
   SupabaseRepository(this._client) {
+    community = SupabaseCommunity(_client, () => _user);
     _client.auth.onAuthStateChange.listen((_) => _refreshProfile());
     _refreshProfile();
   }
 
   final SupabaseClient _client;
+  @override
+  late final CommunityApi community;
   final _userCtrl = StreamController<Profile?>.broadcast();
   Profile? _user;
 
@@ -82,7 +87,18 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<Profile> updateProfile(Profile p) async {
-    await _client.from('profiles').update(p.toMap()..remove('id')).eq('id', p.id);
+    // Only the columns a student may edit. Role and the blue tick are protected
+    // by the database, and badge/office fields are computed, not stored.
+    await _client.from('profiles').update({
+      'full_name': p.fullName,
+      'student_number': p.studentNumber,
+      'programme': p.programme,
+      'year_of_study': p.yearOfStudy,
+      'faculty': p.faculty,
+      'is_tutor': p.isTutor,
+      'tutor_subjects': p.tutorSubjects,
+      'is_buddy_mentor': p.isBuddyMentor,
+    }).eq('id', p.id);
     await _refreshProfile();
     return _user!;
   }
