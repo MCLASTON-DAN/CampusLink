@@ -22,3 +22,10 @@ insert into public.pulse_polls (question, options) values
 ('How is your week going?', '{Great,Okay,Stressed,Overwhelmed}'),
 ('Which support do you need most right now?', '{Academic help,Fees/finance,Accommodation,Mental wellness}')
 on conflict do nothing;
+
+-- Official offices that can publish. Add real people to these in the app or with
+-- insert into public.publisher_members (see README "Who can post").
+insert into public.publishers (kind, name) values
+('administration', 'Cavendish University Uganda Administration'),
+('guild', 'Cavendish University Guild Office')
+on conflict (name) do nothing;
