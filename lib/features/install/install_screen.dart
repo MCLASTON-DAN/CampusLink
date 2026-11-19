@@ -25,6 +25,22 @@ InstallTarget detectInstallTarget() {
   return InstallTarget.other;
 }
 
+/// The Android app needs Android 7.0 or newer (Flutter's minimum, API 24).
+const minAndroidForApk = 7;
+
+/// Reads the Android version from a browser's user agent, e.g. "Android 6.0.1" -> 6.
+/// Returns null when it is not Android or the version is hidden.
+int? androidMajorVersion(String ua) {
+  final m = RegExp(r'android\s+(\d+)', caseSensitive: false).firstMatch(ua);
+  return m == null ? null : int.tryParse(m.group(1)!);
+}
+
+/// False only when we are sure the phone is too old for the APK.
+bool apkFitsThisPhone([String? ua]) {
+  final v = androidMajorVersion(ua ?? pwaUserAgent());
+  return v == null || v >= minAndroidForApk;
+}
+
 /// True when it makes sense to suggest installing (web, not installed yet).
 bool shouldSuggestInstall() => kIsWeb && !pwaIsStandalone();
 
@@ -36,6 +52,7 @@ class InstallScreen extends StatefulWidget {
 
 class _InstallScreenState extends State<InstallScreen> {
   late final InstallTarget _target = detectInstallTarget();
+  late final bool _apkOk = apkFitsThisPhone();
   bool _canPrompt = false;
   Timer? _t;
 
@@ -93,8 +110,10 @@ class _InstallScreenState extends State<InstallScreen> {
         _Row(
           icon: Icons.android_rounded,
           title: 'Android app (APK)',
-          text: 'Download, open the file, and allow "Install unknown apps" for your browser when asked.',
-          button: 'Download',
+          text: _apkOk
+              ? 'Needs Android $minAndroidForApk.0 or newer. Download, open the file, and allow "Install unknown apps" when asked.'
+              : 'This phone is too old for the Android app (needs Android $minAndroidForApk.0+). Use the web app above instead.',
+          button: _apkOk ? 'Download' : null,
           onTap: () => launchUrl(Uri.parse(AppConfig.androidApkUrl), mode: LaunchMode.externalApplication),
         ),
         _Row(
@@ -131,6 +150,20 @@ class _InstallScreenState extends State<InstallScreen> {
           ]),
         );
     switch (_target) {
+      case InstallTarget.android when !_apkOk:
+        return [
+          Text(
+            'This phone runs an Android version older than $minAndroidForApk.0, so the Android app cannot install on it. '
+            'The web app below does the same things: news, events, map, tutors and more.',
+          ),
+          const SizedBox(height: 12),
+          if (_canPrompt)
+            FilledButton.icon(onPressed: _install, icon: const Icon(Icons.install_mobile_rounded), label: const Text('Install the web app'))
+          else ...[
+            step('1', 'Open this page in Chrome.'),
+            step('2', 'Tap the menu (three dots), then "Add to Home screen" or "Install app".'),
+          ],
+        ];
       case InstallTarget.android:
         return [
           FilledButton.icon(
