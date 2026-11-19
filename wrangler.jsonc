@@ -2,7 +2,7 @@
   "name": "campuslink",
   "compatibility_date": "2026-11-01",
   "assets": {
-    "directory": "./build/web",
+    "directory": "./dist",
     "not_found_handling": "single-page-application"
   }
 }

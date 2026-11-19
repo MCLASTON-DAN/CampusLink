@@ -39,6 +39,9 @@ jobs:
           test -f build/web/main.dart.js
           ! grep -q 'FLUTTER_BASE_HREF' build/web/index.html
 
+      - name: Put the build where wrangler.jsonc looks
+        run: rm -rf dist && cp -r build/web dist
+
       - name: Publish to Cloudflare
         uses: cloudflare/wrangler-action@v3
         with:
