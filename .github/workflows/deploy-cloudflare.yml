@@ -42,9 +42,25 @@ jobs:
       - name: Put the build where wrangler.jsonc looks
         run: rm -rf dist && cp -r build/web dist
 
+      - name: Check the Cloudflare secrets exist
+        env:
+          T: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          A: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          ok=1
+          [ -n "$T" ] || { echo "::error::Secret CLOUDFLARE_API_TOKEN is missing or empty (Settings > Secrets and variables > Actions)"; ok=0; }
+          [ -n "$A" ] || { echo "::error::Secret CLOUDFLARE_ACCOUNT_ID is missing or empty (Settings > Secrets and variables > Actions)"; ok=0; }
+          [ "${#A}" -eq 32 ] || [ -z "$A" ] || echo "::warning::CLOUDFLARE_ACCOUNT_ID is ${#A} characters; a real one is 32. Check for spaces or a wrong copy."
+          [ $ok -eq 1 ]
+
       - name: Publish to Cloudflare
-        uses: cloudflare/wrangler-action@v3
-        with:
-          apiToken: ${{ secrets.CLOUDFLARE_API_TOKEN }}
-          accountId: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
-          command: deploy
+        env:
+          CLOUDFLARE_API_TOKEN: ${{ secrets.CLOUDFLARE_API_TOKEN }}
+          CLOUDFLARE_ACCOUNT_ID: ${{ secrets.CLOUDFLARE_ACCOUNT_ID }}
+        run: |
+          set -o pipefail
+          if ! npx --yes wrangler@4 deploy 2>&1 | tee deploy.log; then
+            # Show the real reason on the public run page (no sign-in needed).
+            grep -iE "error|✘|code:|authentication|not found|permission" deploy.log | head -8 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
