@@ -31,7 +31,7 @@ jobs:
           flutter build web --release \
             --base-href "/" \
             --no-web-resources-cdn \
-            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL }} \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL || secrets.SUPERBASE_URL }} \
             --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
 
       - name: Check the build is real (not the raw template)
