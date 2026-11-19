@@ -16,6 +16,9 @@ abstract class CampusRepository {
     String? programme,
     int? yearOfStudy,
   });
+  /// Opens Google sign-in. On the web the page reloads signed in; on phones
+  /// the app reopens through the login-callback link.
+  Future<void> signInWithGoogle();
   Future<void> signOut();
   Future<Profile> updateProfile(Profile p);
 

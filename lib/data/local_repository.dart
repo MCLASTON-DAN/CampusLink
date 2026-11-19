@@ -141,6 +141,10 @@ class LocalRepository implements CampusRepository {
   Future<void> signOut() async => _setUser(null);
 
   @override
+  Future<void> signInWithGoogle() async =>
+      throw Exception('Google sign-in works only when the app is connected to the live database.');
+
+  @override
   Future<Profile> updateProfile(Profile p) async {
     _setUser(p);
     return _tick(p);

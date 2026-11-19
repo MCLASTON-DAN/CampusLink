@@ -2,6 +2,7 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:supabase_flutter/supabase_flutter.dart';
 
 import 'community_repository.dart';
@@ -84,6 +85,16 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<void> signOut() => _client.auth.signOut();
+
+  @override
+  Future<void> signInWithGoogle() async {
+    await _client.auth.signInWithOAuth(
+      OAuthProvider.google,
+      // Web: come back to this same site. Phones: reopen the app.
+      redirectTo: kIsWeb ? '${Uri.base.origin}/' : 'ug.ac.cavendish.campuslink://login-callback',
+      authScreenLaunchMode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    );
+  }
 
   @override
   Future<Profile> updateProfile(Profile p) async {

@@ -61,6 +61,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     }
   }
 
+  Future<void> _google() async {
+    setState(() => _busy = true);
+    try {
+      await ref.read(repositoryProvider).signInWithGoogle();
+    } catch (e) {
+      if (mounted) showSnack(context, 'Google sign-in failed: $e');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final demo = ref.watch(isDemoModeProvider);
@@ -191,6 +202,25 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : Text(_signup ? 'Create account' : 'Sign in'),
                 ),
+                const SizedBox(height: 12),
+                Row(children: [
+                  const Expanded(child: Divider()),
+                  Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text('or', style: Theme.of(context).textTheme.bodySmall)),
+                  const Expanded(child: Divider()),
+                ]),
+                const SizedBox(height: 12),
+                OutlinedButton.icon(
+                  onPressed: _busy || demo ? null : _google,
+                  icon: const Text('G', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF4285F4))),
+                  label: const Text('Continue with Google'),
+                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
+                ),
+                if (demo)
+                  Padding(
+                    padding: const EdgeInsets.only(top: 6),
+                    child: Text('Google sign-in needs the live database (not available in demo mode).',
+                        textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
+                  ),
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => setState(() => _signup = !_signup),
