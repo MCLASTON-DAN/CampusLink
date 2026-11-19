@@ -23,7 +23,7 @@ jobs:
       - uses: actions/setup-java@v4
         with:
           distribution: temurin
-          java-version: '17'
+          java-version: '21'
 
       - uses: subosito/flutter-action@v2
         with:
@@ -34,9 +34,14 @@ jobs:
 
       - name: Build release APK
         run: |
-          flutter build apk --release \
+          set -o pipefail
+          if ! flutter build apk --release \
             --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL || secrets.SUPERBASE_URL }} \
-            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} 2>&1 | tee build.log; then
+            # Show the real error at the top of the run page.
+            grep -iE "error|what went wrong|failed|exception" build.log | tail -15 | while IFS= read -r l; do echo "::error::$l"; done
+            exit 1
+          fi
           cp build/app/outputs/flutter-apk/app-release.apk campuslink.apk
           ls -lh campuslink.apk
 
