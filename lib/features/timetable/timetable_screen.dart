@@ -8,6 +8,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
 import 'timetable_import.dart';
+import 'timetable_picker.dart';
 
 class TimetableScreen extends ConsumerStatefulWidget {
   const TimetableScreen({super.key});
@@ -22,23 +23,22 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
   Future<void> _import() async {
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['csv', 'tsv', 'xlsx', 'xlsm', 'txt', 'pdf', 'docx', 'pptx'],
+      allowedExtensions: ['csv', 'tsv', 'xlsx', 'xlsm', 'txt'],
       withData: true,
     );
     final f = res?.files.firstOrNull;
     if (f == null || f.bytes == null) return;
     final user = ref.read(repositoryProvider).currentUserSync;
     try {
-      final entries = TimetableImporter.parse(
-        f.bytes!,
-        fileName: f.name,
-        courseFilter: [if (user?.programme != null) user!.programme!],
-      );
+      final groups = TimetableImporter.readGroups(f.bytes!, fileName: f.name);
       if (!mounted) return;
-      if (entries.isEmpty) {
+      if (groups.isEmpty) {
         showSnack(context, 'No classes found in that file. Check it has a Day column or day headers.');
         return;
       }
+      final entries = await pickTimetableGroups(context, groups,
+          programme: user?.programme, year: user?.yearOfStudy);
+      if (entries == null || entries.isEmpty || !mounted) return;
       final replace = await showDialog<bool>(
         context: context,
         builder: (ctx) => AlertDialog(
@@ -73,7 +73,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
         );
       }
     } catch (e) {
-      if (mounted) showSnack(context, 'Import failed: $e');
+      if (mounted) showSnack(context, 'Could not read that file. Make sure it is the .xlsx or .csv timetable, not a PDF or photo.');
     }
   }
 
