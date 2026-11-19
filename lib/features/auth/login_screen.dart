@@ -55,7 +55,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
         await repo.signIn(email: _email.text.trim(), password: _password.text);
       }
     } catch (e) {
-      if (mounted) showSnack(context, 'Sign-in failed: $e');
+      if (mounted) showSnack(context, friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -66,7 +66,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     try {
       await ref.read(repositoryProvider).signInWithGoogle();
     } catch (e) {
-      if (mounted) showSnack(context, 'Google sign-in failed: $e');
+      if (mounted) showSnack(context, friendlyAuthError(e));
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -142,10 +142,23 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                 Text(
                   demo
                       ? 'Demo mode: any email and password work. Use an email containing "staff" to see staff tools.'
-                      : 'Sign in with your university email.',
+                      : 'The quickest way in is your Google account.',
                   style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 20),
+                if (!demo) ...[
+                  _GoogleButton(onPressed: _busy ? null : _google),
+                  const SizedBox(height: 16),
+                  Row(children: [
+                    const Expanded(child: Divider()),
+                    Padding(
+                      padding: const EdgeInsets.symmetric(horizontal: 10),
+                      child: Text('or use email', style: Theme.of(context).textTheme.bodySmall),
+                    ),
+                    const Expanded(child: Divider()),
+                  ]),
+                  const SizedBox(height: 16),
+                ],
                 if (_signup) ...[
                   TextFormField(
                     controller: _name,
@@ -202,25 +215,6 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                       ? const SizedBox(height: 20, width: 20, child: CircularProgressIndicator(strokeWidth: 2))
                       : Text(_signup ? 'Create account' : 'Sign in'),
                 ),
-                const SizedBox(height: 12),
-                Row(children: [
-                  const Expanded(child: Divider()),
-                  Padding(padding: const EdgeInsets.symmetric(horizontal: 10), child: Text('or', style: Theme.of(context).textTheme.bodySmall)),
-                  const Expanded(child: Divider()),
-                ]),
-                const SizedBox(height: 12),
-                OutlinedButton.icon(
-                  onPressed: _busy || demo ? null : _google,
-                  icon: const Text('G', style: TextStyle(fontWeight: FontWeight.w900, fontSize: 18, color: Color(0xFF4285F4))),
-                  label: const Text('Continue with Google'),
-                  style: OutlinedButton.styleFrom(minimumSize: const Size.fromHeight(48)),
-                ),
-                if (demo)
-                  Padding(
-                    padding: const EdgeInsets.only(top: 6),
-                    child: Text('Google sign-in needs the live database (not available in demo mode).',
-                        textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
-                  ),
                 const SizedBox(height: 8),
                 TextButton(
                   onPressed: () => setState(() => _signup = !_signup),
@@ -295,4 +289,46 @@ class _Hero extends StatelessWidget {
       ],
     );
   }
+}
+
+
+/// Turns sign-in errors into words a student understands.
+String friendlyAuthError(Object e) {
+  final m = e.toString().toLowerCase();
+  if (m.contains('email logins are disabled') || m.contains('email_provider_disabled') || m.contains('signups not allowed')) {
+    return 'Email sign-in is switched off for now. Please use "Continue with Google".';
+  }
+  if (m.contains('invalid login credentials')) return 'Wrong email or password.';
+  if (m.contains('already registered')) return 'That email already has an account. Sign in instead.';
+  if (m.contains('email not confirmed')) return 'Please confirm your email first (check your inbox).';
+  if (m.contains('provider is not enabled')) return 'Google sign-in is not switched on yet. Ask the admin.';
+  if (m.contains('socket') || m.contains('failed host lookup') || m.contains('network') || m.contains('xmlhttprequest')) {
+    return 'No internet connection. Check it and try again.';
+  }
+  if (m.contains('rate limit')) return 'Too many tries. Wait a minute and try again.';
+  return 'Could not sign in. Please try again.';
+}
+
+class _GoogleButton extends StatelessWidget {
+  const _GoogleButton({required this.onPressed});
+  final VoidCallback? onPressed;
+  @override
+  Widget build(BuildContext context) => OutlinedButton(
+        onPressed: onPressed,
+        style: OutlinedButton.styleFrom(
+          minimumSize: const Size.fromHeight(52),
+          backgroundColor: Theme.of(context).colorScheme.surface,
+        ),
+        child: Row(mainAxisAlignment: MainAxisAlignment.center, children: [
+          // Google's four colours in a simple "G" mark.
+          ShaderMask(
+            shaderCallback: (r) => const SweepGradient(
+              colors: [Color(0xFF4285F4), Color(0xFF34A853), Color(0xFFFBBC05), Color(0xFFEA4335), Color(0xFF4285F4)],
+            ).createShader(r),
+            child: const Text('G', style: TextStyle(fontSize: 22, fontWeight: FontWeight.w900, color: Colors.white)),
+          ),
+          const SizedBox(width: 12),
+          const Text('Continue with Google', style: TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+        ]),
+      );
 }

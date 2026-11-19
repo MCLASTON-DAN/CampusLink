@@ -6,6 +6,10 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/section.dart';
+import '../community/policy_gate.dart';
+import '../install/install_screen.dart';
+import 'package:go_router/go_router.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -15,11 +19,13 @@ class ProfileScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).valueOrNull;
     final demo = ref.watch(isDemoModeProvider);
     if (user == null) return const SizedBox.shrink();
+    final mems = (ref.watch(myMembershipsProvider).valueOrNull ?? []).where((m) => m.isActive).toList();
+    final isOfficeHolder = mems.isNotEmpty;
+    final canManage = mems.any((m) => m.can('manage_members'));
 
     return Scaffold(
-      appBar: AppBar(title: const Text('My profile')),
-      body: ListView(
-        padding: const EdgeInsets.all(16),
+      appBar: AppBar(title: const Text('Me')),
+      body: PageBody(
         children: [
           GradientCard(
             gradient: Brand.primaryGradient,
@@ -45,7 +51,7 @@ class ProfileScreen extends ConsumerWidget {
                       ),
                       const SizedBox(height: 8),
                       Wrap(spacing: 6, children: [
-                        _Tag(user.role.name.toUpperCase()),
+                        _Tag(user.isSuperAdmin ? 'SUPER ADMIN' : user.role.name.toUpperCase()),
                         if (user.isTutor) const _Tag('TUTOR'),
                         if (user.isBuddyMentor) const _Tag('BUDDY MENTOR'),
                       ]),
@@ -104,15 +110,38 @@ class ProfileScreen extends ConsumerWidget {
               ],
             ),
           ),
+          const SectionTitle('Your things'),
+          TileGrid(children: [
+            if (shouldSuggestInstall())
+              ActionTile(icon: Icons.install_mobile_rounded, title: 'Install the app', subtitle: 'Phone, tablet or computer', color: const Color(0xFF3B2DB3), onTap: () => context.push('/install')),
+            ActionTile(icon: Icons.assignment_ind_rounded, title: 'My lessons', subtitle: 'Tutor requests and reviews', color: const Color(0xFF7C3AED), onTap: () => context.push('/tutors/mine')),
+            ActionTile(icon: Icons.support_agent_rounded, title: 'My help requests', subtitle: 'Track what you asked', color: const Color(0xFFF97316), onTap: () => context.push('/requests')),
+            ActionTile(icon: Icons.gavel_rounded, title: 'Removal log', subtitle: 'Everything removed, and why', color: const Color(0xFF64748B), onTap: () => context.push('/moderation')),
+            ActionTile(icon: Icons.privacy_tip_rounded, title: 'Privacy', subtitle: 'What we keep and why', color: const Color(0xFF0EA5E9), onTap: () => showPolicy(context, 'privacy')),
+            ActionTile(icon: Icons.rule_rounded, title: 'Posting code', subtitle: 'Rules for official posts', color: const Color(0xFF059669), onTap: () => showPolicy(context, 'posting_code')),
+          ]),
+          if (isOfficeHolder || user.isStaff) ...[
+            const SectionTitle('Office tools'),
+            TileGrid(children: [
+              if (canManage || user.isSuperAdmin)
+                ActionTile(icon: Icons.badge_rounded, title: 'Office members', subtitle: 'Appoint people, terms up to 12 months', color: const Color(0xFF2E9E5B), onTap: () => context.push('/members')),
+              if (user.isStaff)
+                ActionTile(icon: Icons.flag_rounded, title: 'Reports', subtitle: 'What students flagged', color: const Color(0xFFE53935), onTap: () => context.push('/reports')),
+              if (user.isStaff)
+                ActionTile(icon: Icons.location_city_rounded, title: 'Campuses & offices', subtitle: 'Keep places and hours correct', color: const Color(0xFF6366F1), onTap: () => context.push('/campuses')),
+              if (user.isSuperAdmin)
+                ActionTile(icon: Icons.approval_rounded, title: 'Major event requests', subtitle: 'Approve what shows on home', color: const Color(0xFFF59E0B), onTap: () => context.push('/events/requests')),
+            ]),
+          ],
           const SizedBox(height: 16),
           Card(
             child: Column(
               children: [
                 ListTile(
                   leading: Icon(demo ? Icons.science_rounded : Icons.cloud_done_rounded, color: demo ? Brand.amber : Brand.teal),
-                  title: Text(demo ? 'Demo mode' : 'Connected to Supabase'),
+                  title: Text(demo ? 'Demo mode' : 'Synced'),
                   subtitle: Text(demo
-                      ? 'Data is saved on this device only. Build with SUPABASE_URL and SUPABASE_ANON_KEY to go live.'
+                      ? 'Data is saved on this device only.'
                       : 'Your data is synced across all your devices.'),
                 ),
                 const ListTile(

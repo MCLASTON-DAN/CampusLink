@@ -574,6 +574,7 @@ class CampusEvent {
   final String? topic; // what the event is about
   final String? impact; // how students benefit
   final String? onlineUrl; // meeting link
+  final String? coverPath; // full picture address
   final String status; // draft | published | removed
   final String majorStatus; // none | requested | approved | rejected
   final String? majorReason;
@@ -597,6 +598,7 @@ class CampusEvent {
     this.topic,
     this.impact,
     this.onlineUrl,
+    this.coverPath,
     this.status = 'published',
     this.majorStatus = 'none',
     this.majorReason,
@@ -639,6 +641,7 @@ class CampusEvent {
         topic: topic,
         impact: impact,
         onlineUrl: onlineUrl,
+        coverPath: coverPath,
         status: status ?? this.status,
         majorStatus: majorStatus ?? this.majorStatus,
         majorReason: majorReason,
@@ -663,6 +666,7 @@ class CampusEvent {
         topic: m['topic'],
         impact: m['impact'],
         onlineUrl: m['online_url'],
+        coverPath: m['cover_path'],
         status: m['status'] ?? 'published',
         majorStatus: m['major_status'] ?? 'none',
         majorReason: m['major_reason'],
@@ -689,6 +693,7 @@ class CampusEvent {
         'topic': topic,
         'impact': impact,
         'online_url': onlineUrl,
+        'cover_path': coverPath,
         'status': status,
         'major_status': majorStatus,
         'major_reason': majorReason,

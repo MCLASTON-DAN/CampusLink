@@ -1,8 +1,8 @@
 name: Deploy web app to GitHub Pages
 
+# Manual only: the live site is on Cloudflare. Run this from the Actions tab
+# if you ever switch GitHub Pages on (Settings > Pages > Source: GitHub Actions).
 on:
-  push:
-    branches: [main]
   workflow_dispatch:
 
 permissions:

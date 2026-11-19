@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/cupertino.dart' show CupertinoPageTransitionsBuilder;
 
 /// CampusLink brand: deep indigo → violet → warm coral.
 class Brand {
@@ -46,58 +47,120 @@ class Brand {
 }
 
 ThemeData buildTheme(Brightness brightness) {
+  final light = brightness == Brightness.light;
   final scheme = ColorScheme.fromSeed(
     seedColor: Brand.indigo,
     brightness: brightness,
-    primary: brightness == Brightness.light ? Brand.indigo : const Color(0xFFB4A7FF),
+    primary: light ? Brand.indigo : const Color(0xFFB4A7FF),
     secondary: Brand.violet,
     tertiary: Brand.coral,
+    surface: light ? Colors.white : const Color(0xFF17162A),
   );
-  final base = ThemeData(colorScheme: scheme, useMaterial3: true);
+  final base = ThemeData(colorScheme: scheme, useMaterial3: true, brightness: brightness, fontFamily: 'Inter');
+  final text = base.textTheme.apply(
+    bodyColor: scheme.onSurface,
+    displayColor: scheme.onSurface,
+  );
+  final border = BorderSide(color: scheme.outlineVariant.withValues(alpha: light ? 0.55 : 0.35));
   return base.copyWith(
-    scaffoldBackgroundColor:
-        brightness == Brightness.light ? const Color(0xFFF6F5FB) : const Color(0xFF0F0E1A),
+    scaffoldBackgroundColor: light ? const Color(0xFFF5F6FA) : const Color(0xFF0E0D1A),
+    textTheme: text.copyWith(
+      headlineMedium: text.headlineMedium?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.6),
+      headlineSmall: text.headlineSmall?.copyWith(fontWeight: FontWeight.w800, letterSpacing: -0.4),
+      titleLarge: text.titleLarge?.copyWith(fontWeight: FontWeight.w700, letterSpacing: -0.2),
+      titleMedium: text.titleMedium?.copyWith(fontWeight: FontWeight.w700),
+      titleSmall: text.titleSmall?.copyWith(fontWeight: FontWeight.w700),
+      labelLarge: text.labelLarge?.copyWith(fontWeight: FontWeight.w600),
+      bodyMedium: text.bodyMedium?.copyWith(height: 1.45),
+      bodySmall: text.bodySmall?.copyWith(color: scheme.onSurfaceVariant),
+    ),
+    // Calm, flat cards with a hairline border (the "pro app" look).
     cardTheme: CardThemeData(
       elevation: 0,
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      clipBehavior: Clip.antiAlias,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16), side: border),
       color: scheme.surface,
       margin: EdgeInsets.zero,
     ),
+    dividerTheme: DividerThemeData(color: border.color, space: 1, thickness: 1),
+    listTileTheme: ListTileThemeData(
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+      iconColor: scheme.onSurfaceVariant,
+    ),
     appBarTheme: AppBarTheme(
-      backgroundColor: Colors.transparent,
+      backgroundColor: light ? const Color(0xFFF5F6FA) : const Color(0xFF0E0D1A),
+      surfaceTintColor: Colors.transparent,
       elevation: 0,
-      scrolledUnderElevation: 0,
+      scrolledUnderElevation: 0.5,
       centerTitle: false,
-      titleTextStyle: base.textTheme.titleLarge?.copyWith(
-        fontWeight: FontWeight.w700,
-        color: scheme.onSurface,
-      ),
+      titleTextStyle: TextStyle(fontFamily: 'Inter', fontSize: 22, fontWeight: FontWeight.w800, letterSpacing: -0.4, color: scheme.onSurface),
     ),
     inputDecorationTheme: InputDecorationTheme(
       filled: true,
-      fillColor: scheme.surfaceContainerHighest.withValues(alpha: 0.5),
-      border: OutlineInputBorder(
-        borderRadius: BorderRadius.circular(14),
-        borderSide: BorderSide.none,
-      ),
+      fillColor: light ? const Color(0xFFF0F1F6) : scheme.surfaceContainerHighest.withValues(alpha: 0.4),
+      border: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      enabledBorder: OutlineInputBorder(borderRadius: BorderRadius.circular(12), borderSide: BorderSide.none),
+      focusedBorder: OutlineInputBorder(
+          borderRadius: BorderRadius.circular(12), borderSide: BorderSide(color: scheme.primary, width: 1.6)),
       contentPadding: const EdgeInsets.symmetric(horizontal: 16, vertical: 14),
     ),
     filledButtonTheme: FilledButtonThemeData(
       style: FilledButton.styleFrom(
-        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 16),
-        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(14)),
+        minimumSize: const Size(64, 48),
+        padding: const EdgeInsets.symmetric(horizontal: 22, vertical: 14),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        textStyle: const TextStyle(fontWeight: FontWeight.w700),
+      ),
+    ),
+    outlinedButtonTheme: OutlinedButtonThemeData(
+      style: OutlinedButton.styleFrom(
+        minimumSize: const Size(64, 48),
+        shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(12)),
+        side: border,
         textStyle: const TextStyle(fontWeight: FontWeight.w600),
       ),
     ),
+    floatingActionButtonTheme: FloatingActionButtonThemeData(
+      elevation: 2,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(16)),
+    ),
     chipTheme: base.chipTheme.copyWith(
-      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(10)),
-      side: BorderSide.none,
+      shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(20)),
+      side: border,
+    ),
+    tabBarTheme: TabBarThemeData(
+      labelStyle: const TextStyle(fontWeight: FontWeight.w700),
+      dividerColor: border.color,
+      indicatorSize: TabBarIndicatorSize.label,
     ),
     navigationBarTheme: NavigationBarThemeData(
-      indicatorColor: scheme.primary.withValues(alpha: 0.15),
-      labelTextStyle: WidgetStatePropertyAll(
-        TextStyle(fontSize: 12, fontWeight: FontWeight.w600, color: scheme.onSurface),
-      ),
+      height: 66,
+      elevation: 0,
+      backgroundColor: scheme.surface,
+      surfaceTintColor: Colors.transparent,
+      indicatorColor: scheme.primary.withValues(alpha: 0.12),
+      labelTextStyle: WidgetStateProperty.resolveWith((s) => TextStyle(
+            fontSize: 12,
+            fontWeight: s.contains(WidgetState.selected) ? FontWeight.w800 : FontWeight.w600,
+            color: s.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant,
+          )),
+      iconTheme: WidgetStateProperty.resolveWith((s) =>
+          IconThemeData(color: s.contains(WidgetState.selected) ? scheme.primary : scheme.onSurfaceVariant)),
     ),
+    navigationRailTheme: NavigationRailThemeData(
+      backgroundColor: scheme.surface,
+      indicatorColor: scheme.primary.withValues(alpha: 0.12),
+      selectedIconTheme: IconThemeData(color: scheme.primary),
+      selectedLabelTextStyle: TextStyle(color: scheme.primary, fontWeight: FontWeight.w800),
+      unselectedLabelTextStyle: TextStyle(color: scheme.onSurfaceVariant, fontWeight: FontWeight.w600),
+    ),
+    // Smooth, consistent screen changes on every platform.
+    pageTransitionsTheme: const PageTransitionsTheme(builders: {
+      TargetPlatform.android: FadeForwardsPageTransitionsBuilder(),
+      TargetPlatform.iOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.macOS: CupertinoPageTransitionsBuilder(),
+      TargetPlatform.windows: FadeForwardsPageTransitionsBuilder(),
+      TargetPlatform.linux: FadeForwardsPageTransitionsBuilder(),
+    }),
   );
 }

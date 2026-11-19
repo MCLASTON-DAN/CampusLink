@@ -1,0 +1,52 @@
+name: Build Android app (APK)
+
+# Builds the Android app on every push to main and puts it at a fixed link:
+# https://github.com/<owner>/<repo>/releases/download/android-latest/campuslink.apk
+on:
+  push:
+    branches: [main]
+  workflow_dispatch:
+
+permissions:
+  contents: write   # needed to update the release
+
+concurrency:
+  group: android
+  cancel-in-progress: true
+
+jobs:
+  apk:
+    runs-on: ubuntu-latest
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-java@v4
+        with:
+          distribution: temurin
+          java-version: '17'
+
+      - uses: subosito/flutter-action@v2
+        with:
+          channel: stable
+          cache: true
+
+      - run: flutter pub get
+
+      - name: Build release APK
+        run: |
+          flutter build apk --release \
+            --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL || secrets.SUPERBASE_URL }} \
+            --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }}
+          cp build/app/outputs/flutter-apk/app-release.apk campuslink.apk
+          ls -lh campuslink.apk
+
+      - name: Publish to the "android-latest" release
+        uses: softprops/action-gh-release@v2
+        with:
+          tag_name: android-latest
+          name: CampusLink for Android (latest)
+          body: |
+            Latest Android build of CampusLink, made automatically from the main branch.
+            Download campuslink.apk, open it, and allow "Install unknown apps" for your browser when asked.
+          files: campuslink.apk
+          make_latest: true

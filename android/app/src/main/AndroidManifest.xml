@@ -1,6 +1,8 @@
 <manifest xmlns:android="http://schemas.android.com/apk/res/android">
+    <!-- Needed to reach the database and pictures in release builds. -->
+    <uses-permission android:name="android.permission.INTERNET"/>
     <application
-        android:label="campuslink"
+        android:label="CampusLink"
         android:name="${applicationName}"
         android:icon="@mipmap/ic_launcher">
         <activity
@@ -44,6 +46,11 @@
 
          In particular, this is used by the Flutter engine in io.flutter.plugin.text.ProcessTextPlugin. -->
     <queries>
+        <!-- Lets the app open web links, YouTube and WhatsApp. -->
+        <intent>
+            <action android:name="android.intent.action.VIEW"/>
+            <data android:scheme="https"/>
+        </intent>
         <intent>
             <action android:name="android.intent.action.PROCESS_TEXT"/>
             <data android:mimeType="text/plain"/>

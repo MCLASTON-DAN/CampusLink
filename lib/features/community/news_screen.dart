@@ -7,7 +7,10 @@ import '../../data/community_models.dart';
 import '../../data/community_repository.dart';
 import '../../data/providers.dart';
 import '../../widgets/badge.dart';
+import '../../widgets/section.dart';
 import '../../widgets/common.dart';
+import '../../widgets/media.dart';
+import '../../core/image_tools.dart';
 import 'policy_gate.dart';
 
 const _filters = <String?, String>{
@@ -19,13 +22,39 @@ const _filters = <String?, String>{
 };
 
 class NewsScreen extends ConsumerStatefulWidget {
-  const NewsScreen({super.key});
+  const NewsScreen({super.key, this.embedded = false});
+  final bool embedded;
   @override
   ConsumerState<NewsScreen> createState() => _NewsScreenState();
 }
 
 class _NewsScreenState extends ConsumerState<NewsScreen> {
   String? _kind;
+  final _more = <Post>[]; // older pages loaded with "Load more"
+  bool _loadingMore = false;
+  bool _end = false;
+
+  void _setKind(String? k) => setState(() {
+        _kind = k;
+        _more.clear();
+        _end = false;
+      });
+
+  Future<void> _loadMore(List<Post> first) async {
+    final all = [...first, ..._more];
+    if (all.isEmpty) return;
+    setState(() => _loadingMore = true);
+    try {
+      final page = await ref.read(communityProvider).posts(kind: _kind, before: all.last.publishedAt);
+      setState(() {
+        _more.addAll(page);
+        _end = page.length < 20;
+      });
+    } catch (_) {
+      if (mounted) showSnack(context, 'Could not load more. Check your connection.');
+    }
+    if (mounted) setState(() => _loadingMore = false);
+  }
 
   @override
   Widget build(BuildContext context) {
@@ -33,7 +62,7 @@ class _NewsScreenState extends ConsumerState<NewsScreen> {
     final mems = ref.watch(myMembershipsProvider).valueOrNull ?? [];
     final canPost = mems.any((m) => m.isActive && (m.can('news') || m.can('notices') || m.can('meeting_links')));
     return Scaffold(
-      appBar: AppBar(title: const Text('Campus news')),
+      appBar: widget.embedded ? null : AppBar(title: const Text('Campus news')),
       floatingActionButton: canPost
           ? FloatingActionButton.extended(
               onPressed: () async {
@@ -58,7 +87,7 @@ class _NewsScreenState extends ConsumerState<NewsScreen> {
                     child: ChoiceChip(
                       label: Text(e.value),
                       selected: _kind == e.key,
-                      onSelected: (_) => setState(() => _kind = e.key),
+                      onSelected: (_) => _setKind(e.key),
                     ),
                   ),
               ],
@@ -74,12 +103,36 @@ class _NewsScreenState extends ConsumerState<NewsScreen> {
                       title: 'Nothing here yet',
                       subtitle: 'Only verified offices can post news.')
                   : RefreshIndicator(
-                      onRefresh: () async => ref.refresh(postsProvider(_kind).future),
-                      child: ListView.builder(
-                        padding: const EdgeInsets.fromLTRB(12, 4, 12, 90),
-                        itemCount: list.length,
-                        itemBuilder: (_, i) => PostCard(list[i]),
-                      ),
+                      onRefresh: () async {
+                        setState(() {
+                          _more.clear();
+                          _end = false;
+                        });
+                        return ref.refresh(postsProvider(_kind).future);
+                      },
+                      child: Builder(builder: (context) {
+                        final all = [...list, ..._more];
+                        final canMore = !_end && list.length >= 20;
+                        // Built lazily: only cards on screen are drawn.
+                        return ListView.builder(
+                          padding: const EdgeInsets.fromLTRB(12, 4, 12, 96),
+                          itemCount: all.length + (canMore ? 1 : 0),
+                          itemBuilder: (_, i) => Center(
+                            child: ConstrainedBox(
+                              constraints: const BoxConstraints(maxWidth: 720),
+                              child: i < all.length
+                                  ? PostCard(all[i])
+                                  : Padding(
+                                      padding: const EdgeInsets.symmetric(vertical: 8),
+                                      child: OutlinedButton(
+                                        onPressed: _loadingMore ? null : () => _loadMore(list),
+                                        child: Text(_loadingMore ? 'Loading…' : 'Load more'),
+                                      ),
+                                    ),
+                            ),
+                          ),
+                        );
+                      }),
                     ),
             ),
           ),
@@ -90,47 +143,74 @@ class _NewsScreenState extends ConsumerState<NewsScreen> {
 }
 
 class PostCard extends StatelessWidget {
-  const PostCard(this.p, {super.key});
+  const PostCard(this.p, {super.key, this.compact = false});
   final Post p;
+  final bool compact; // smaller card for the home screen carousel
 
   @override
   Widget build(BuildContext context) {
     final t = Theme.of(context).textTheme;
+    final media = MediaBanner.has(coverUrl: p.coverPath, videoUrl: p.videoUrl);
     return Card(
-      margin: const EdgeInsets.only(bottom: 10),
+      margin: EdgeInsets.only(bottom: compact ? 0 : 12),
       child: InkWell(
-        borderRadius: BorderRadius.circular(16),
         onTap: () => context.push('/news/${p.id}'),
-        child: Padding(
-          padding: const EdgeInsets.all(14),
-          child: Column(
-            crossAxisAlignment: CrossAxisAlignment.start,
-            children: [
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (media) MediaBanner(coverUrl: p.coverPath, videoUrl: p.videoUrl),
+          Padding(
+            padding: const EdgeInsets.fromLTRB(16, 14, 16, 12),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
-                Flexible(child: NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: t.labelLarge)),
-                const Spacer(),
-                Text(friendlyDate(p.publishedAt), style: t.bodySmall),
+                Flexible(child: _KindPill(p)),
+                const SizedBox(width: 8),
+                Expanded(
+                  child: Text('${friendlyDate(p.publishedAt)}${p.isEdited ? ' · edited' : ''}',
+                      style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                ),
               ]),
-              const SizedBox(height: 6),
-              Wrap(spacing: 6, children: [
-                StatusChip(p.kindLabel, color: p.kind == 'clarification' ? Colors.orange : Colors.indigo),
-                if (p.isEdited) const StatusChip('Edited', color: Colors.grey),
-              ]),
-              const SizedBox(height: 6),
-              Text(p.title, style: t.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
-              const SizedBox(height: 4),
-              Text(p.body, maxLines: 3, overflow: TextOverflow.ellipsis, style: t.bodyMedium),
               const SizedBox(height: 8),
+              Text(p.title,
+                  maxLines: compact ? 2 : 3,
+                  overflow: TextOverflow.ellipsis,
+                  style: t.titleMedium?.copyWith(fontWeight: FontWeight.w800, height: 1.25)),
+              if (!compact || !media) ...[
+                const SizedBox(height: 6),
+                Text(p.body, maxLines: compact ? 2 : 3, overflow: TextOverflow.ellipsis, style: t.bodyMedium?.copyWith(color: t.bodySmall?.color)),
+              ],
+              const SizedBox(height: 12),
               Row(children: [
-                Icon(p.likedByMe ? Icons.favorite : Icons.favorite_border, size: 16),
-                Text(' ${p.likes}   '),
-                const Icon(Icons.chat_bubble_outline, size: 16),
-                Text(' ${p.comments}'),
+                Expanded(child: NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: t.labelMedium)),
+                Icon(p.likedByMe ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 16,
+                    color: p.likedByMe ? Colors.redAccent : t.bodySmall?.color),
+                Text(' ${p.likes}  ', style: t.bodySmall),
+                Icon(Icons.mode_comment_outlined, size: 16, color: t.bodySmall?.color),
+                Text(' ${p.comments}', style: t.bodySmall),
               ]),
-            ],
+            ]),
           ),
-        ),
+        ]),
       ),
+    );
+  }
+}
+
+class _KindPill extends StatelessWidget {
+  const _KindPill(this.p);
+  final Post p;
+  @override
+  Widget build(BuildContext context) {
+    final c = switch (p.kind) {
+      'clarification' => const Color(0xFFEA580C),
+      'notice' || 'official_record' => const Color(0xFFE53935),
+      'meeting_link' => const Color(0xFF0EA5E9),
+      _ => Theme.of(context).colorScheme.primary,
+    };
+    return Container(
+      padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+      decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(6)),
+      child: Text(p.kindLabel.toUpperCase(),
+          maxLines: 1, overflow: TextOverflow.ellipsis,
+          style: TextStyle(color: c, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 0.4)),
     );
   }
 }
@@ -170,7 +250,11 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
           ? const Center(child: CircularProgressIndicator())
           : p == null
               ? const EmptyState(icon: Icons.search_off_rounded, title: 'Post not found')
-              : ListView(padding: const EdgeInsets.all(16), children: [
+              : PageBody(maxWidth: 760, children: [
+                  if (MediaBanner.has(coverUrl: p.coverPath, videoUrl: p.videoUrl)) ...[
+                    MediaBanner(coverUrl: p.coverPath, videoUrl: p.videoUrl, radius: 16),
+                    const SizedBox(height: 16),
+                  ],
                   NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: Theme.of(context).textTheme.titleSmall),
                   Text('${p.kindLabel} · ${friendlyDate(p.publishedAt)}${p.isEdited ? ' · edited' : ''}',
                       style: Theme.of(context).textTheme.bodySmall),
@@ -271,7 +355,7 @@ class _ReactionsState extends ConsumerState<Reactions> {
       ),
       TextButton.icon(
         onPressed: () async {
-          final r = await _ask('Why are you reporting this?', 5);
+          final r = await _ask('Why are you reporting this?', 10);
           if (r == null) return;
           try {
             await api.report(widget.targetType, widget.targetId, r);
@@ -401,6 +485,25 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
   String _kind = 'news';
   bool _pledge = false;
   bool _busy = false;
+  bool _uploading = false;
+  String? _cover;
+
+  Future<void> _pickCover() async {
+    setState(() => _uploading = true);
+    try {
+      final demo = ref.read(isDemoModeProvider);
+      final bytes = await pickAndShrinkImage(maxBytes: demo ? 190 * 1024 : 900 * 1024);
+      if (bytes != null) {
+        final url = await ref.read(communityProvider).uploadImage(bytes, extension: 'jpg');
+        if (mounted) setState(() => _cover = url);
+      }
+    } on CommunityException catch (e) {
+      if (mounted) showSnack(context, e.message);
+    } on FormatException catch (e) {
+      if (mounted) showSnack(context, e.message);
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
 
   List<String> _kindsFor(Membership m) => [
         if (m.can('news')) ...['news', 'clarification'],
@@ -421,7 +524,14 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
     if (!kinds.contains(_kind) && kinds.isNotEmpty) _kind = kinds.first;
     return Scaffold(
       appBar: AppBar(title: const Text('New post')),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
+      body: PageBody(maxWidth: 760, children: [
+        CoverPicker(
+          url: _cover,
+          busy: _uploading,
+          onClear: () => setState(() => _cover = null),
+          onPick: _pickCover,
+        ),
+        const SizedBox(height: 14),
         if (mems.length > 1)
           DropdownButtonFormField<Membership>(
             isExpanded: true,
@@ -484,8 +594,8 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
       showSnack(context, 'Add a title (5+ letters) and a message (20+ letters).');
       return;
     }
-    if (_source.text.trim().length < 5) {
-      showSnack(context, 'Say where this comes from.');
+    if (_source.text.trim().length < 10) {
+      showSnack(context, 'Say where this comes from (at least 10 letters).');
       return;
     }
     final v = _video.text.trim();
@@ -503,6 +613,7 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
             sourceNote: _source.text,
             videoUrl: v,
             meetingUrl: _meeting.text.trim(),
+            coverPath: _cover,
           );
       if (mounted) context.pop();
     } on CommunityException catch (e) {

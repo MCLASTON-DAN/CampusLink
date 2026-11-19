@@ -45,6 +45,7 @@ abstract class CommunityApi {
     required String sourceNote,
     String? videoUrl,
     String? meetingUrl,
+    String? coverPath,
     DateTime? expiresAt,
     String? correctsPostId,
   });

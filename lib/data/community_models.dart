@@ -120,6 +120,7 @@ class Post {
   final String body;
   final String? videoUrl;
   final String? meetingUrl;
+  final String? coverPath; // full picture address
   final String sourceNote;
   final String? correctsPostId;
   final String status;
@@ -143,6 +144,7 @@ class Post {
     required this.body,
     this.videoUrl,
     this.meetingUrl,
+    this.coverPath,
     required this.sourceNote,
     this.correctsPostId,
     this.status = 'published',
@@ -182,6 +184,7 @@ class Post {
         body: body,
         videoUrl: videoUrl,
         meetingUrl: meetingUrl,
+        coverPath: coverPath,
         sourceNote: sourceNote,
         correctsPostId: correctsPostId,
         status: status,
@@ -206,6 +209,7 @@ class Post {
         body: m['body'] ?? '',
         videoUrl: m['video_url'],
         meetingUrl: m['meeting_url'],
+        coverPath: m['cover_path'],
         sourceNote: m['source_note'] ?? '',
         correctsPostId: m['corrects_post_id'],
         status: m['status'] ?? 'published',
@@ -230,6 +234,7 @@ class Post {
         'body': body,
         'video_url': videoUrl,
         'meeting_url': meetingUrl,
+        'cover_path': coverPath,
         'source_note': sourceNote,
         'corrects_post_id': correctsPostId,
         'status': status,

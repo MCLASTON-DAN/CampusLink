@@ -211,6 +211,7 @@ class SupabaseCommunity implements CommunityApi {
     required String sourceNote,
     String? videoUrl,
     String? meetingUrl,
+    String? coverPath,
     DateTime? expiresAt,
     String? correctsPostId,
   }) =>
@@ -226,6 +227,7 @@ class SupabaseCommunity implements CommunityApi {
               'source_note': sourceNote.trim(),
               if (videoUrl != null && videoUrl.isNotEmpty) 'video_url': videoUrl,
               if (meetingUrl != null && meetingUrl.isNotEmpty) 'meeting_url': meetingUrl,
+              if (coverPath != null && coverPath.isNotEmpty) 'cover_path': coverPath,
               if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
               if (correctsPostId != null) 'corrects_post_id': correctsPostId,
             })
@@ -354,6 +356,7 @@ class SupabaseCommunity implements CommunityApi {
               'topic': e.topic,
               'impact': e.impact,
               if (e.onlineUrl != null && e.onlineUrl!.isNotEmpty) 'online_url': e.onlineUrl,
+              if (e.coverPath != null && e.coverPath!.isNotEmpty) 'cover_path': e.coverPath,
               'major_status': e.majorStatus == 'requested' ? 'requested' : 'none',
               if (e.majorStatus == 'requested') 'major_reason': e.majorReason,
             })

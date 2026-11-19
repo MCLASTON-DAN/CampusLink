@@ -61,6 +61,24 @@
       setTimeout(function () { s.remove(); }, 400);
     });
   </script>
+  <script>
+    // Install support: the browser offers "install" once; we keep the offer
+    // so the app's own Install button can use it at the right moment.
+    window.__clInstall = null;
+    window.addEventListener('beforeinstallprompt', function (e) { e.preventDefault(); window.__clInstall = e; });
+    window.addEventListener('appinstalled', function () { window.__clInstall = null; });
+    window.campuslinkCanInstall = function () { return !!window.__clInstall; };
+    window.campuslinkIsStandalone = function () {
+      return (window.matchMedia && matchMedia('(display-mode: standalone)').matches) || navigator.standalone === true;
+    };
+    window.campuslinkUA = function () { return navigator.userAgent || ''; };
+    window.campuslinkInstall = function () {
+      var p = window.__clInstall;
+      if (!p) return Promise.resolve('unavailable');
+      p.prompt();
+      return p.userChoice.then(function (r) { window.__clInstall = null; return r.outcome; });
+    };
+  </script>
   <script src="flutter_bootstrap.js" async></script>
 </body>
 </html>

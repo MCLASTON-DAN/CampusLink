@@ -324,6 +324,7 @@ class LocalCommunity implements CommunityApi {
     required String sourceNote,
     String? videoUrl,
     String? meetingUrl,
+    String? coverPath,
     DateTime? expiresAt,
     String? correctsPostId,
   }) async {
@@ -363,6 +364,7 @@ class LocalCommunity implements CommunityApi {
       body: body.trim(),
       videoUrl: (videoUrl?.isEmpty ?? true) ? null : videoUrl,
       meetingUrl: (meetingUrl?.isEmpty ?? true) ? null : meetingUrl,
+      coverPath: (coverPath?.isEmpty ?? true) ? null : coverPath,
       sourceNote: sourceNote.trim(),
       correctsPostId: correctsPostId,
       publishedAt: DateTime.now(),
@@ -585,6 +587,7 @@ class LocalCommunity implements CommunityApi {
       topic: e.topic,
       impact: e.impact,
       onlineUrl: e.onlineUrl,
+      coverPath: e.coverPath,
       majorStatus: major,
       majorReason: e.majorReason,
       speakers: e.speakers.map((s) => EventSpeaker(id: _uuid.v4(), name: s.name, title: s.title, role: s.role, bio: s.bio)).toList(),

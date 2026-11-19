@@ -6,19 +6,25 @@ import '../../core/theme.dart';
 import '../../data/providers.dart';
 
 class _Dest {
-  const _Dest(this.path, this.label, this.icon, this.selectedIcon);
+  const _Dest(this.path, this.label, this.icon, this.selectedIcon, this.prefixes);
   final String path;
   final String label;
   final IconData icon;
   final IconData selectedIcon;
+  final List<String> prefixes; // pages that belong to this section
 }
 
+// Five calm sections. Everything else lives inside one of them.
 const _dests = [
-  _Dest('/home', 'Home', Icons.home_outlined, Icons.home_rounded),
-  _Dest('/where', 'Where?', Icons.explore_outlined, Icons.explore_rounded),
-  _Dest('/requests', 'Requests', Icons.support_agent_outlined, Icons.support_agent_rounded),
-  _Dest('/timetable', 'Timetable', Icons.calendar_month_outlined, Icons.calendar_month_rounded),
-  _Dest('/profile', 'Me', Icons.person_outline_rounded, Icons.person_rounded),
+  _Dest('/home', 'Home', Icons.home_outlined, Icons.home_rounded, ['/home']),
+  _Dest('/feed', 'Feed', Icons.dynamic_feed_outlined, Icons.dynamic_feed_rounded,
+      ['/feed', '/news', '/events', '/surveys']),
+  _Dest('/campus', 'Campus', Icons.explore_outlined, Icons.explore_rounded,
+      ['/campus', '/where', '/map', '/directory', '/campuses', '/requests', '/lostfound', '/announcements', '/engage']),
+  _Dest('/study', 'Study', Icons.school_outlined, Icons.school_rounded,
+      ['/study', '/tutors', '/groups', '/timetable', '/buddy', '/pulse']),
+  _Dest('/profile', 'Me', Icons.person_outline_rounded, Icons.person_rounded,
+      ['/profile', '/community', '/members', '/reports', '/moderation', '/install']),
 ];
 
 /// Responsive scaffold: bottom bar on phones, nav rail on tablets/desktop/web.
@@ -28,7 +34,7 @@ class AppShell extends ConsumerWidget {
   final Widget child;
 
   int get _index {
-    final i = _dests.indexWhere((d) => location.startsWith(d.path));
+    final i = _dests.indexWhere((d) => d.prefixes.any(location.startsWith));
     return i < 0 ? 0 : i;
   }
 
@@ -69,7 +75,8 @@ class AppShell extends ConsumerWidget {
             NavigationRail(
               selectedIndex: _index,
               onDestinationSelected: (i) => context.go(_dests[i].path),
-              labelType: NavigationRailLabelType.all,
+              extended: MediaQuery.sizeOf(context).width >= 1240,
+              labelType: MediaQuery.sizeOf(context).width >= 1240 ? NavigationRailLabelType.none : NavigationRailLabelType.all,
               leading: Padding(
                 padding: const EdgeInsets.only(bottom: 16, top: 8),
                 child: Container(

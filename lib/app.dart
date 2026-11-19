@@ -13,6 +13,8 @@ import 'features/community/map_screen.dart';
 import 'features/community/more_screens.dart';
 import 'features/community/news_screen.dart';
 import 'features/community/office_edit.dart';
+import 'features/hubs/hubs.dart';
+import 'features/install/install_screen.dart';
 import 'features/directory/directory_screen.dart';
 import 'features/directory/office_detail_screen.dart';
 import 'features/engage/engage_screen.dart';
@@ -72,7 +74,11 @@ final routerProvider = Provider<GoRouter>((ref) {
               ),
             ],
           ),
-          GoRoute(path: '/study', builder: (_, __) => const StudyScreen()),
+          GoRoute(path: '/study', builder: (_, __) => const StudyHubScreen()),
+          GoRoute(path: '/groups', builder: (_, __) => const StudyScreen()),
+          GoRoute(path: '/feed', builder: (_, s) => FeedScreen(initialTab: int.tryParse(s.uri.queryParameters['tab'] ?? '') ?? 0)),
+          GoRoute(path: '/campus', builder: (_, __) => const CampusHubScreen()),
+          GoRoute(path: '/install', builder: (_, __) => const InstallScreen()),
           GoRoute(path: '/pulse', builder: (_, __) => const PulseScreen()),
           GoRoute(path: '/buddy', builder: (_, __) => const BuddyScreen()),
           GoRoute(path: '/where', builder: (_, __) => const WhereScreen()),

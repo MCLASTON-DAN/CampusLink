@@ -12,4 +12,9 @@ class AppConfig {
 
   static const appName = 'CampusLink';
   static const university = 'Cavendish University Uganda';
+
+  /// Public web address and the always-latest Android download.
+  static const webUrl = 'https://campuslink.danmclaston.workers.dev';
+  static const androidApkUrl =
+      'https://github.com/MCLASTON-DAN/CampusLink/releases/download/android-latest/campuslink.apk';
 }

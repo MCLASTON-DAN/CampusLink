@@ -139,7 +139,7 @@ class LostFoundScreen extends ConsumerWidget {
                                   ? TextButton(onPressed: () => context.push('/lostfound/${i.id}'), child: const Text('Claims'))
                                   : FilledButton(
                                       onPressed: () async {
-                                        final p = await _prompt(context, 'Proof this is yours', min: 15, hint: 'Colour, marks, what is inside…');
+                                        final p = await _prompt(context, 'Proof this is yours', min: 20, hint: 'Colour, marks, what is inside…');
                                         if (p == null || !context.mounted) return;
                                         await _run(context, () => api.claimItem(i.id, p), ok: 'Sent. The office will check.');
                                         ref.invalidate(lostFoundProvider);
@@ -209,12 +209,13 @@ class _ClaimsState extends ConsumerState<ClaimsScreen> {
 
 // ------------------------------------------------------------ surveys
 class SurveysScreen extends ConsumerWidget {
-  const SurveysScreen({super.key});
+  const SurveysScreen({super.key, this.embedded = false});
+  final bool embedded;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final mems = (ref.watch(myMembershipsProvider).valueOrNull ?? []).where((m) => m.isActive && m.can('surveys')).toList();
     return Scaffold(
-      appBar: AppBar(title: const Text('Surveys')),
+      appBar: embedded ? null : AppBar(title: const Text('Surveys')),
       floatingActionButton: mems.isEmpty
           ? null
           : FloatingActionButton.extended(
@@ -396,6 +397,12 @@ class _CreateSurveyState extends ConsumerState<CreateSurveyScreen> {
         FilledButton(
           onPressed: () async {
             final mem = (ref.read(myMembershipsProvider).valueOrNull ?? []).firstWhere((m) => m.isActive && m.can('surveys'));
+            if (_title.text.trim().length < 5) return showSnack(context, 'Give the survey a title (5+ letters).');
+            if (_purpose.text.trim().length < 30) return showSnack(context, 'Explain why you are asking (30+ letters). Students see this.');
+            if (_qs.isEmpty || _qs.any((q) => q.$1.text.trim().length < 3)) return showSnack(context, 'Add at least one question, each 3+ letters.');
+            if (_qs.any((q) => (q.$3 == 'single' || q.$3 == 'multi') && q.$2.text.split(',').where((o) => o.trim().isNotEmpty).length < 2)) {
+              return showSnack(context, 'Pick-one and pick-many questions need at least 2 options.');
+            }
             final qs = [
               for (var i = 0; i < _qs.length; i++)
                 SurveyQuestion(
@@ -599,7 +606,7 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
                       availability: _avail.text,
                       modules: [
                         for (final m in _mods.where((m) => m.$1.text.trim().isNotEmpty))
-                          TutorModule(id: '', courseCode: m.$1.text, priceUgx: int.tryParse(m.$2.text.trim()) ?? 0),
+                          TutorModule(id: '', courseCode: m.$1.text, priceUgx: (int.tryParse(m.$2.text.trim().replaceAll(',', '')) ?? 0).clamp(0, 500000)),
                       ],
                     );
                 ref.invalidate(tutorCardsProvider);
@@ -755,6 +762,18 @@ class _MembersState extends ConsumerState<MembersScreen> {
       ),
     );
     if (ok != true || !context.mounted) return false;
+    if (num.text.trim().isEmpty) {
+      showSnack(context, 'Enter their student number.');
+      return false;
+    }
+    if (title.text.trim().length < 3 || title.text.trim().length > 80) {
+      showSnack(context, 'Position must be 3–80 letters.');
+      return false;
+    }
+    if (scopes.isEmpty) {
+      showSnack(context, 'Tick at least one thing they may do.');
+      return false;
+    }
     var done = false;
     await _run(context, () async {
       await api.appointMember(publisherId: pubId, studentNumber: num.text, positionTitle: title.text, scopes: scopes.toList(), expiresAt: DateTime.now().add(Duration(days: months * 30)));

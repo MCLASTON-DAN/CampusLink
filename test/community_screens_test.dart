@@ -5,6 +5,10 @@ import 'package:campuslink/features/community/map_screen.dart';
 import 'package:campuslink/features/community/more_screens.dart';
 import 'package:campuslink/features/community/news_screen.dart';
 import 'package:campuslink/features/community/office_edit.dart';
+import 'package:campuslink/features/home/home_screen.dart';
+import 'package:campuslink/features/hubs/hubs.dart';
+import 'package:campuslink/features/install/install_screen.dart';
+import 'package:campuslink/features/profile/profile_screen.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -29,14 +33,20 @@ void main() {
     'reports': () => const ReportsScreen(),
     'members': () => const MembersScreen(),
     'campuses': () => const CampusesScreen(),
+    'home': () => const Scaffold(body: HomeScreen()),
+    'feed': () => const FeedScreen(),
+    'campus hub': () => const CampusHubScreen(),
+    'study hub': () => const StudyHubScreen(),
+    'me': () => const ProfileScreen(),
+    'install': () => const InstallScreen(),
     'edit office': () => const OfficeEditScreen(officeId: 'off-registrar'),
   };
 
   for (final email in ['super@x.ug', 'guild@x.ug', 'student@x.ug']) {
-    for (final scale in [1.0, 1.8]) {
+    for (final (scale, size) in [(1.0, const Size(390, 844)), (1.8, const Size(390, 844)), (1.0, const Size(1440, 900))]) {
       for (final e in screens.entries) {
-        testWidgets('${e.key} draws for $email at text x$scale', (tester) async {
-          tester.view.physicalSize = const Size(390, 844);
+        testWidgets('${e.key} draws for $email at text x$scale on ${size.width.toInt()}px', (tester) async {
+          tester.view.physicalSize = size;
           tester.view.devicePixelRatio = 1;
           addTearDown(tester.view.reset);
           SharedPreferences.setMockInitialValues({});

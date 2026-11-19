@@ -5,12 +5,16 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../../core/theme.dart';
 import '../../data/community_models.dart';
 import '../../data/community_repository.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/badge.dart';
 import '../../widgets/common.dart';
+import '../../widgets/media.dart';
+import '../../widgets/section.dart';
+import '../../core/image_tools.dart';
 import 'news_screen.dart';
 
 String countdownText(DateTime start, DateTime now) {
@@ -57,31 +61,50 @@ class FeaturedEventsBanner extends ConsumerWidget {
     if (list.isEmpty) return const SizedBox.shrink();
     return Column(children: [
       for (final e in list.take(2))
-        Card(
-          color: Theme.of(context).colorScheme.primaryContainer,
-          child: ListTile(
+        Padding(
+          padding: const EdgeInsets.only(top: 10),
+          child: GradientCard(
+            gradient: Brand.sunsetGradient,
+            radius: 16,
+            padding: const EdgeInsets.all(16),
             onTap: () => context.push('/events/${e.id}'),
-            leading: const Icon(Icons.campaign_rounded),
-            title: Text(e.title, maxLines: 1, overflow: TextOverflow.ellipsis),
-            subtitle: Text('${eventDate(e.startsAt)} · ${e.location ?? 'Online'}'),
-            trailing: Countdown(e.startsAt, style: const TextStyle(fontWeight: FontWeight.w800)),
+            child: Row(children: [
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  const Text('MAJOR EVENT', style: TextStyle(color: Colors.white70, fontSize: 11, fontWeight: FontWeight.w800, letterSpacing: 1)),
+                  const SizedBox(height: 4),
+                  Text(e.title, maxLines: 2, overflow: TextOverflow.ellipsis,
+                      style: const TextStyle(color: Colors.white, fontSize: 17, fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 4),
+                  Text('${eventDate(e.startsAt)} · ${e.location ?? 'Online'}',
+                      maxLines: 1, overflow: TextOverflow.ellipsis, style: const TextStyle(color: Colors.white)),
+                ]),
+              ),
+              const SizedBox(width: 12),
+              Container(
+                padding: const EdgeInsets.symmetric(horizontal: 10, vertical: 8),
+                decoration: BoxDecoration(color: Colors.white.withValues(alpha: 0.2), borderRadius: BorderRadius.circular(12)),
+                child: Countdown(e.startsAt, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w900)),
+              ),
+            ]),
           ),
         ),
     ]);
   }
 }
 
-final _eventListProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).events());
+final eventListProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).events());
 
 class EventsListScreen extends ConsumerWidget {
-  const EventsListScreen({super.key});
+  const EventsListScreen({super.key, this.embedded = false});
+  final bool embedded;
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final me = ref.watch(currentUserProvider).valueOrNull;
     final mems = ref.watch(myMembershipsProvider).valueOrNull ?? [];
     final canPost = mems.any((m) => m.isActive && m.can('events'));
     return Scaffold(
-      appBar: AppBar(title: const Text('Events'), actions: [
+      appBar: embedded ? null : AppBar(title: const Text('Events'), actions: [
         if (me?.isSuperAdmin ?? false)
           IconButton(
               tooltip: 'Major event requests',
@@ -92,37 +115,28 @@ class EventsListScreen extends ConsumerWidget {
           ? FloatingActionButton.extended(
               onPressed: () async {
                 await context.push('/events/new');
-                ref.invalidate(_eventListProvider);
+                ref.invalidate(eventListProvider);
               },
               icon: const Icon(Icons.add),
               label: const Text('Event'))
           : null,
       body: AsyncBody(
-        value: ref.watch(_eventListProvider),
-        onRetry: () => ref.invalidate(_eventListProvider),
+        value: ref.watch(eventListProvider),
+        onRetry: () => ref.invalidate(eventListProvider),
         builder: (list) {
           final now = DateTime.now();
           final up = list.where((e) => e.status == 'published' && e.startsAt.isAfter(now.subtract(const Duration(hours: 3)))).toList()
             ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
           if (up.isEmpty) return const EmptyState(icon: Icons.event_busy_rounded, title: 'No upcoming events');
           return ListView.builder(
-            padding: const EdgeInsets.fromLTRB(12, 8, 12, 90),
+            padding: const EdgeInsets.fromLTRB(12, 8, 12, 96),
             itemCount: up.length,
-            itemBuilder: (_, i) {
-              final e = up[i];
-              return Card(
-                child: ListTile(
-                  onTap: () => context.push('/events/${e.id}'),
-                  title: Row(children: [
-                    Flexible(child: Text(e.title, overflow: TextOverflow.ellipsis)),
-                    if (e.isMajor) const Padding(padding: EdgeInsets.only(left: 6), child: Icon(Icons.star_rounded, color: Colors.amber, size: 18)),
-                  ]),
-                  subtitle: Text('${eventDate(e.startsAt)}\n${e.publisherName}'),
-                  isThreeLine: true,
-                  trailing: Countdown(e.startsAt, style: Theme.of(context).textTheme.labelMedium),
-                ),
-              );
-            },
+            itemBuilder: (_, i) => Center(
+              child: ConstrainedBox(
+                constraints: const BoxConstraints(maxWidth: 720),
+                child: Padding(padding: const EdgeInsets.only(bottom: 12), child: EventCard(up[i])),
+              ),
+            ),
           );
         },
       ),
@@ -162,7 +176,11 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
           ? const Center(child: CircularProgressIndicator())
           : e == null
               ? const EmptyState(icon: Icons.search_off_rounded, title: 'Event not found')
-              : ListView(padding: const EdgeInsets.all(16), children: [
+              : PageBody(maxWidth: 760, children: [
+                  if ((e.coverPath ?? '').isNotEmpty) ...[
+                    MediaBanner(coverUrl: e.coverPath, radius: 16),
+                    const SizedBox(height: 16),
+                  ],
                   Text(e.title, style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 4),
                   NameWithBadge('By ${e.publisherName}', e.badge, style: t.titleSmall),
@@ -225,7 +243,25 @@ class _ComposeEventState extends ConsumerState<ComposeEventScreen> {
   final _loc = TextEditingController(), _url = TextEditingController(), _reason = TextEditingController();
   final _speakers = <List<TextEditingController>>[];
   DateTime _start = DateTime.now().add(const Duration(days: 3));
-  bool _major = false, _busy = false;
+  bool _major = false, _busy = false, _uploading = false;
+  String? _cover;
+
+  Future<void> _pickCover() async {
+    setState(() => _uploading = true);
+    try {
+      final demo = ref.read(isDemoModeProvider);
+      final bytes = await pickAndShrinkImage(maxBytes: demo ? 190 * 1024 : 900 * 1024);
+      if (bytes != null) {
+        final url = await ref.read(communityProvider).uploadImage(bytes, extension: 'jpg');
+        if (mounted) setState(() => _cover = url);
+      }
+    } on CommunityException catch (e) {
+      if (mounted) showSnack(context, e.message);
+    } on FormatException catch (e) {
+      if (mounted) showSnack(context, e.message);
+    }
+    if (mounted) setState(() => _uploading = false);
+  }
   Membership? _mem;
 
   Future<void> _pick() async {
@@ -245,7 +281,9 @@ class _ComposeEventState extends ConsumerState<ComposeEventScreen> {
     _mem ??= mems.first;
     return Scaffold(
       appBar: AppBar(title: const Text('New event')),
-      body: ListView(padding: const EdgeInsets.all(16), children: [
+      body: PageBody(maxWidth: 760, children: [
+        CoverPicker(url: _cover, busy: _uploading, onClear: () => setState(() => _cover = null), onPick: _pickCover),
+        const SizedBox(height: 14),
         if (mems.length > 1)
           DropdownButtonFormField<Membership>(
             isExpanded: true,
@@ -306,6 +344,7 @@ class _ComposeEventState extends ConsumerState<ComposeEventScreen> {
             topic: _topic.text,
             impact: _impact.text,
             onlineUrl: _url.text.trim(),
+            coverPath: _cover,
             majorStatus: _major ? 'requested' : 'none',
             majorReason: _major ? _reason.text.trim() : null,
             speakers: [
@@ -361,6 +400,76 @@ class MajorRequestsScreen extends ConsumerWidget {
                     ),
                   ),
               ]),
+      ),
+    );
+  }
+}
+
+
+/// Date block like a paper calendar: "12 / NOV".
+class DateBadge extends StatelessWidget {
+  const DateBadge(this.d, {super.key});
+  final DateTime d;
+  static const _m = ['JAN', 'FEB', 'MAR', 'APR', 'MAY', 'JUN', 'JUL', 'AUG', 'SEP', 'OCT', 'NOV', 'DEC'];
+  @override
+  Widget build(BuildContext context) {
+    final s = Theme.of(context).colorScheme;
+    return Container(
+      width: 52,
+      padding: const EdgeInsets.symmetric(vertical: 6),
+      decoration: BoxDecoration(color: s.primary.withValues(alpha: 0.1), borderRadius: BorderRadius.circular(12)),
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        Text('${d.day}', style: TextStyle(fontSize: 20, fontWeight: FontWeight.w900, color: s.primary, height: 1.1)),
+        Text(_m[d.month - 1], style: TextStyle(fontSize: 11, fontWeight: FontWeight.w800, color: s.primary, letterSpacing: 0.6)),
+      ]),
+    );
+  }
+}
+
+class EventCard extends StatelessWidget {
+  const EventCard(this.e, {super.key, this.compact = false});
+  final CampusEvent e;
+  final bool compact;
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final hasCover = (e.coverPath ?? '').isNotEmpty;
+    return Card(
+      child: InkWell(
+        onTap: () => context.push('/events/${e.id}'),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          if (hasCover && !compact) MediaBanner(coverUrl: e.coverPath),
+          Padding(
+            padding: const EdgeInsets.all(14),
+            child: Row(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              DateBadge(e.startsAt),
+              const SizedBox(width: 14),
+              Expanded(
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  Row(children: [
+                    if (e.isMajor) ...[
+                      const Icon(Icons.star_rounded, color: Colors.amber, size: 18),
+                      const SizedBox(width: 4),
+                    ],
+                    Expanded(child: Text(e.title, maxLines: 2, overflow: TextOverflow.ellipsis, style: t.titleSmall)),
+                  ]),
+                  const SizedBox(height: 4),
+                  Text('${eventDate(e.startsAt)} · ${e.location ?? 'Online'}', style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 6),
+                  Row(children: [
+                    Expanded(
+                      // Old events may have only an organiser name and no office: no tick then.
+                      child: e.publisherName.isNotEmpty
+                          ? NameWithBadge(e.publisherName, e.badge, style: t.labelSmall)
+                          : Text(e.organiser ?? '', style: t.labelSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                    ),
+                    Countdown(e.startsAt, style: t.labelMedium?.copyWith(color: Theme.of(context).colorScheme.primary, fontWeight: FontWeight.w800)),
+                  ]),
+                ]),
+              ),
+            ]),
+          ),
+        ]),
       ),
     );
   }
