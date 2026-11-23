@@ -109,8 +109,8 @@ class SeedData {
   static final announcements = <Announcement>[
     Announcement(
       id: 'ann-1',
-      title: 'Innovation Challenge 2026 – live demos on 4 Nov',
-      body: 'IEEE Cavendish & CUUCSA invite all students to the Innovation Challenge finals. Demos and 2‑minute pitches start at 10:00 in the Main Hall.',
+      title: 'Career fair – meet employers on campus',
+      body: 'The Careers Office invites all students to meet employers and internship providers. Bring copies of your CV. Starts at 10:00 in the Main Hall.',
       category: 'events',
       isPinned: true,
       createdAt: now.subtract(const Duration(hours: 5)),
@@ -166,15 +166,15 @@ class SeedData {
   ];
 
   static final events = <CampusEvent>[
-    CampusEvent(id: 'ev-1', title: 'Innovation Challenge Finals', description: 'Live demos and pitches. Come support your classmates!', startsAt: DateTime(now.year, now.month, now.day + 1, 10), location: 'Main Hall', organiser: 'IEEE Cavendish'),
-    CampusEvent(id: 'ev-2', title: 'CUUCSA Hack Night', description: 'Bring a laptop, build something, pizza included.', startsAt: DateTime(now.year, now.month, now.day + 3, 17), location: 'FST Lab 1', organiser: 'CUUCSA'),
+    CampusEvent(id: 'ev-1', title: 'Career Fair', description: 'Meet employers and internship providers. Bring your CV.', startsAt: DateTime(now.year, now.month, now.day + 1, 10), location: 'Main Hall', organiser: 'Careers Office'),
+    CampusEvent(id: 'ev-2', title: 'Coding Night', description: 'Bring a laptop and build something with classmates.', startsAt: DateTime(now.year, now.month, now.day + 3, 17), location: 'FST Lab 1', organiser: 'Computer Science Association'),
     CampusEvent(id: 'ev-3', title: 'Careers Fair', description: 'Meet 20+ employers hiring interns and graduates.', startsAt: DateTime(now.year, now.month, now.day + 8, 9), location: "Students' Centre", organiser: 'Careers Office'),
     CampusEvent(id: 'ev-4', title: 'Wellness Wednesday: Exam stress workshop', description: 'Practical techniques for staying calm during exams.', startsAt: DateTime(now.year, now.month, now.day + 5, 13), location: "Students' Centre S2", organiser: 'Counselling & Wellness'),
   ];
 
   static final clubs = <Club>[
-    const Club(id: 'club-1', name: 'IEEE Cavendish Student Branch', description: 'Tech talks, hackathons, innovation challenges.', contact: 'ieee@cavendish.ac.ug', memberCount: 86),
-    const Club(id: 'club-2', name: 'CUUCSA', description: 'Cavendish University Uganda Computer Science Association.', contact: 'cuucsa@cavendish.ac.ug', memberCount: 140),
+    const Club(id: 'club-1', name: 'Engineering & Technology Club', description: 'Tech talks, hackathons and projects.', contact: 'tech.club@cavendish.ac.ug', memberCount: 86),
+    const Club(id: 'club-2', name: 'Computer Science Association', description: 'Students of computing programmes.', contact: 'csa@cavendish.ac.ug', memberCount: 140),
     const Club(id: 'club-3', name: 'Debate Society', description: 'Weekly debates and public speaking practice.', memberCount: 42),
     const Club(id: 'club-4', name: 'Drama & Arts', description: 'Theatre, music and visual arts.', memberCount: 35),
     const Club(id: 'club-5', name: 'Football Club', description: 'Training Tue/Thu 17:00 at the pitch.', memberCount: 60),

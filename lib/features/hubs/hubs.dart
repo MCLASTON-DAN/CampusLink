@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/section.dart';
 import '../community/events_screens.dart';
@@ -40,7 +41,7 @@ class CampusHubScreen extends ConsumerWidget {
   const CampusHubScreen({super.key});
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final open = ref.watch(myRequestsProvider).valueOrNull?.where((r) => r.status != 'resolved' && r.status != 'closed').length ?? 0;
+    final open = ref.watch(myRequestsProvider).valueOrNull?.where((r) => r.status != RequestStatus.resolved && r.status != RequestStatus.closed).length ?? 0;
     return Scaffold(
       appBar: AppBar(title: const Text('Campus')),
       body: PageBody(children: [
@@ -79,6 +80,7 @@ class StudyHubScreen extends StatelessWidget {
           const SectionTitle('Your week'),
           TileGrid(children: [
             ActionTile(icon: Icons.calendar_month_rounded, title: 'Timetable', subtitle: 'Your classes. Import from Excel or CSV', color: const Color(0xFF3B2DB3), onTap: () => context.go('/timetable')),
+            ActionTile(icon: Icons.menu_book_rounded, title: 'Course units', subtitle: 'Notices from your lecturers, only for your units', color: const Color(0xFFF97316), onTap: () => context.go('/courses')),
             ActionTile(icon: Icons.handshake_rounded, title: 'First-year buddy', subtitle: 'Get matched with a senior mentor', color: const Color(0xFFF59E0B), onTap: () => context.push('/buddy')),
             ActionTile(icon: Icons.monitor_heart_rounded, title: 'Campus pulse', subtitle: 'Quick anonymous polls', color: const Color(0xFFDB2777), onTap: () => context.push('/pulse')),
           ]),

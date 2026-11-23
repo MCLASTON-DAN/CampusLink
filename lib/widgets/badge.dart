@@ -1,7 +1,7 @@
 import 'package:flutter/material.dart';
 
 /// Tick in a circle. red = administration, green = guild (in office),
-/// blue = verified tutor (earned). Tap to learn what it means.
+/// purple = Campus Newsroom, blue = verified tutor (earned). Tap to learn what it means.
 class VerifiedBadge extends StatelessWidget {
   const VerifiedBadge(this.color, {super.key, this.size = 16});
   final String? color;
@@ -11,6 +11,8 @@ class VerifiedBadge extends StatelessWidget {
         'red' => const Color(0xFFE53935),
         'green' => const Color(0xFF2E9E5B),
         'blue' => const Color(0xFF1E88E5),
+        'purple' => const Color(0xFF7C3AED),
+        'orange' => const Color(0xFFF97316),
         _ => null,
       };
 
@@ -18,6 +20,8 @@ class VerifiedBadge extends StatelessWidget {
         'red' => 'Red tick: official University Administration.',
         'green' => 'Green tick: a Guild member who holds this office right now. It goes away when their term ends.',
         'blue' => 'Blue tick: tutor verified by many real reviews. It is earned, not given.',
+        'purple' => 'Purple tick: a member of the Campus Newsroom (at most 5 people), while in post.',
+        'orange' => 'Orange tick: a lecturer, assigned by the university to the units they teach.',
         _ => '',
       };
 
@@ -30,9 +34,9 @@ class VerifiedBadge extends StatelessWidget {
       child: GestureDetector(
         onTap: () => showDialog(
           context: context,
-          builder: (_) => AlertDialog(
+          builder: (dialogContext) => AlertDialog(
             content: Text(meaning(color)),
-            actions: [TextButton(onPressed: () => Navigator.pop(context), child: const Text('OK'))],
+            actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('OK'))],
           ),
         ),
         child: Container(

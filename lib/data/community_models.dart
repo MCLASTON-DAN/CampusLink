@@ -13,6 +13,7 @@ List<String> _strs(dynamic v) =>
 String? badgeForKind(String? kind) => switch (kind) {
       'administration' => 'red',
       'guild' => 'green',
+      'press' => 'purple',
       _ => null,
     };
 
@@ -691,7 +692,139 @@ class TutorCard {
     this.score = 0,
     this.reviews = 0,
     this.reviewers = 0,
+    this.lessons = 0,
+    this.paused = false,
   });
+
+  /// Lessons the tutor has actually taught (students confirmed them).
+  final int lessons;
+  /// Hidden from the list while 3+ students have open reports.
+  final bool paused;
+
+  /// Grows with real teaching: New -> Rising -> Experienced -> Expert.
+  String get level {
+    if (lessons >= 50 && score >= 4.3) return 'Expert';
+    if (lessons >= 20) return 'Experienced';
+    if (lessons >= 5) return 'Rising';
+    return 'New';
+  }
+}
+
+const tutorReportReasons = {
+  'no_show': 'Did not show up / unavailable',
+  'unprofessional': 'Unprofessional behaviour',
+  'poor_teaching': 'Poor or wrong teaching',
+  'overcharging': 'Overcharging or payment problems',
+  'harassment': 'Harassment or made me unsafe',
+  'other': 'Something else',
+};
+
+class TutorReportRow {
+  TutorReportRow({
+    required this.tutorId,
+    required this.tutorName,
+    required this.reason,
+    required this.n,
+    required this.pct,
+    required this.total,
+    required this.reporters,
+    required this.open,
+  });
+  final String tutorId, tutorName, reason;
+  final int n, total, reporters, open;
+  final double pct;
+  factory TutorReportRow.fromMap(Map<String, dynamic> m) => TutorReportRow(
+        tutorId: m['tutor_id'],
+        tutorName: m['tutor_name'] ?? '',
+        reason: m['reason'],
+        n: (m['n'] as num).toInt(),
+        pct: (m['pct'] as num).toDouble(),
+        total: (m['total'] as num).toInt(),
+        reporters: (m['reporters'] as num).toInt(),
+        open: (m['open_reports'] as num).toInt(),
+      );
+}
+
+class CourseNotice {
+  CourseNotice({
+    required this.id,
+    required this.lecturerId,
+    required this.lecturerName,
+    required this.courseCodes,
+    required this.title,
+    required this.body,
+    this.linkUrl,
+    this.priority = 'normal',
+    required this.createdAt,
+  });
+  final String id, lecturerId, lecturerName, title, body, priority;
+  final List<String> courseCodes;
+  final String? linkUrl;
+  final DateTime createdAt;
+  factory CourseNotice.fromMap(Map<String, dynamic> m) => CourseNotice(
+        id: m['id'],
+        lecturerId: m['lecturer_id'],
+        lecturerName: m['lecturer_name'] ?? '',
+        courseCodes: List<String>.from(m['course_codes'] ?? const []),
+        title: m['title'],
+        body: m['body'],
+        linkUrl: m['link_url'],
+        priority: m['priority'] ?? 'normal',
+        createdAt: DateTime.parse(m['created_at'].toString()),
+      );
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'lecturer_id': lecturerId,
+        'lecturer_name': lecturerName,
+        'course_codes': courseCodes,
+        'title': title,
+        'body': body,
+        'link_url': linkUrl,
+        'priority': priority,
+        'created_at': createdAt.toIso8601String(),
+      };
+}
+
+class CourseLecturer {
+  CourseLecturer({required this.courseCode, required this.lecturerId, required this.name});
+  final String courseCode, lecturerId, name;
+}
+
+class AppNotification {
+  AppNotification({
+    required this.id,
+    required this.kind,
+    required this.title,
+    this.body = '',
+    this.link,
+    this.priority = 'normal',
+    required this.createdAt,
+    this.read = false,
+  });
+  final String id, kind, title, body, priority;
+  final String? link;
+  final DateTime createdAt;
+  final bool read;
+  factory AppNotification.fromMap(Map<String, dynamic> m) => AppNotification(
+        id: m['id'],
+        kind: m['kind'] ?? 'official',
+        title: m['title'] ?? '',
+        body: m['body'] ?? '',
+        link: m['link'],
+        priority: m['priority'] ?? 'normal',
+        createdAt: DateTime.parse(m['created_at'].toString()),
+        read: m['read_at'] != null,
+      );
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'kind': kind,
+        'title': title,
+        'body': body,
+        'link': link,
+        'priority': priority,
+        'created_at': createdAt.toIso8601String(),
+        'read_at': read ? DateTime.now().toIso8601String() : null,
+      };
 }
 
 class TutorRequest {

@@ -23,7 +23,9 @@ Future<void> main() async {
         url: AppConfig.supabaseUrl,
         publishableKey: AppConfig.supabaseAnonKey,
       );
-      repo = SupabaseRepository(Supabase.instance.client);
+      final live = SupabaseRepository(Supabase.instance.client);
+      await live.ready; // know who is signed in before the first screen
+      repo = live;
       demo = false;
     } catch (_) {
       // Bad keys or no network at boot: fall back so the app still opens.

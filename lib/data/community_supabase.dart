@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'dart:typed_data';
 
 import 'package:supabase_flutter/supabase_flutter.dart';
@@ -573,7 +574,8 @@ class SupabaseCommunity implements CommunityApi {
             .from('public_profiles')
             .select('id, full_name, programme, year_of_study, tutor_verified')
             .eq('is_tutor', true);
-        return _cards(List<Map<String, dynamic>>.from(people));
+        // Tutors under review (3+ open reports) are hidden until staff decide.
+        return (await _cards(List<Map<String, dynamic>>.from(people))).where((c) => !c.paused).toList();
       });
 
   Future<List<TutorCard>> _cards(List<Map<String, dynamic>> people) async {
@@ -582,6 +584,8 @@ class SupabaseCommunity implements CommunityApi {
     final profiles = await _client.from('tutor_profiles').select().inFilter('tutor_id', ids);
     final modules = await _client.from('tutor_modules').select().inFilter('tutor_id', ids).eq('is_active', true);
     final scores = await _client.from('tutor_scores').select().inFilter('tutor_id', ids);
+    final stats = await _client.rpc('tutor_stats') as List;
+    final stById = {for (final s in stats) s['tutor_id'] as String: s};
     final pById = {for (final p in profiles) p['tutor_id'] as String: p};
     final sById = {for (final s in scores) s['tutor_id'] as String: s};
     final cards = people.map((p) {
@@ -601,6 +605,8 @@ class SupabaseCommunity implements CommunityApi {
         score: ((sc?['score'] ?? 0) as num).toDouble(),
         reviews: ((sc?['reviews'] ?? 0) as num).toInt(),
         reviewers: ((sc?['reviewers'] ?? 0) as num).toInt(),
+        lessons: ((stById[id]?['lessons'] ?? 0) as num).toInt(),
+        paused: stById[id]?['paused'] == true,
       );
     }).toList()
       ..sort((a, b) => b.score.compareTo(a.score));
@@ -731,4 +737,169 @@ class SupabaseCommunity implements CommunityApi {
   Future<void> accept(String policy, String version) => _guard(() => _client
       .from('policy_acceptances')
       .upsert({'user_id': _uid, 'policy': policy, 'version': version}));
+
+  // ------------------------------------------------------------- post views
+  @override
+  Future<void> recordView(String postId) async {
+    try {
+      await _client.rpc('record_post_view', params: {'p_post': postId});
+    } catch (_) {/* counting must never break reading */}
+  }
+
+  @override
+  Future<int?> viewCount(String postId) => _guard(() async {
+        final n = await _client.rpc('post_view_count', params: {'p_post': postId});
+        return n == null ? null : (n as num).toInt();
+      });
+
+  // ------------------------------------------------------------- avatar
+  @override
+  Future<String> uploadAvatar(Uint8List bytes) => _guard(() async {
+        if (bytes.length > 300 * 1024) throw CommunityException('Profile photos must be under 300 KB');
+        final path = '$_uid/${_uuid.v4()}.jpeg';
+        await _client.storage.from('avatars').uploadBinary(path, bytes,
+            fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false));
+        return _client.storage.from('avatars').getPublicUrl(path);
+      });
+
+  // ------------------------------------------------------------- tutor trust
+  @override
+  Future<void> reportTutor({required String tutorId, required String reason, required String details}) =>
+      _guard(() async {
+        try {
+          await _client.from('tutor_reports').insert({'tutor_id': tutorId, 'reason': reason, 'details': details.trim()});
+        } on PostgrestException catch (e) {
+          if (e.code == '42501') {
+            throw CommunityException('You can only report a tutor you have had a lesson with.');
+          }
+          if (e.code == '23505') throw CommunityException('You already have an open report about this tutor.');
+          rethrow;
+        }
+      });
+
+  @override
+  Future<List<TutorReportRow>> tutorReportSummary() => _guard(() async {
+        final rows = await _client.rpc('tutor_report_summary') as List;
+        return rows.map((r) => TutorReportRow.fromMap(Map<String, dynamic>.from(r))).toList();
+      });
+
+  @override
+  Future<void> closeTutorReports(String tutorId, {required bool upheld}) => _guard(() => _client
+      .from('tutor_reports')
+      .update({
+        'status': upheld ? 'upheld' : 'dismissed',
+        'handled_by': _uid,
+        'handled_at': DateTime.now().toUtc().toIso8601String(),
+      })
+      .eq('tutor_id', tutorId)
+      .eq('status', 'open'));
+
+  // ------------------------------------------------------------- course units
+  @override
+  Future<List<String>> myTeachingUnits() => _guard(() async {
+        final rows = await _client.from('course_lecturers').select('course_code').eq('lecturer_id', _uid);
+        return rows.map((r) => r['course_code'] as String).toList()..sort();
+      });
+
+  @override
+  Future<List<CourseNotice>> courseNotices() => _guard(() async {
+        final rows = await _client.from('course_notices').select().order('created_at', ascending: false).limit(100);
+        final ids = rows.map((r) => r['lecturer_id'] as String).toSet().toList();
+        final names = ids.isEmpty
+            ? <dynamic>[]
+            : await _client.from('public_profiles').select('id, full_name').inFilter('id', ids);
+        final byId = {for (final n in names) n['id'] as String: n['full_name'] as String? ?? ''};
+        return rows.map((r) => CourseNotice.fromMap({...r, 'lecturer_name': byId[r['lecturer_id']] ?? ''})).toList();
+      });
+
+  @override
+  Future<void> sendCourseNotice({
+    required List<String> courseCodes,
+    required String title,
+    required String body,
+    String? linkUrl,
+    String priority = 'normal',
+  }) =>
+      _guard(() async {
+        try {
+          await _client.from('course_notices').insert({
+            'course_codes': courseCodes,
+            'title': title.trim(),
+            'body': body.trim(),
+            'link_url': (linkUrl ?? '').trim().isEmpty ? null : linkUrl!.trim(),
+            'priority': priority,
+          });
+        } on PostgrestException catch (e) {
+          if (e.code == '42501') {
+            throw CommunityException('You can only send notices to units you are assigned to teach.');
+          }
+          rethrow;
+        }
+      });
+
+  @override
+  Future<List<CourseLecturer>> courseLecturers() => _guard(() async {
+        final rows = await _client.from('course_lecturers').select().order('course_code');
+        final ids = rows.map((r) => r['lecturer_id'] as String).toSet().toList();
+        final names = ids.isEmpty
+            ? <dynamic>[]
+            : await _client.from('public_profiles').select('id, full_name').inFilter('id', ids);
+        final byId = {for (final n in names) n['id'] as String: n['full_name'] as String? ?? ''};
+        return rows
+            .map((r) => CourseLecturer(
+                courseCode: r['course_code'], lecturerId: r['lecturer_id'], name: byId[r['lecturer_id']] ?? ''))
+            .toList();
+      });
+
+  @override
+  Future<void> assignLecturer({required String email, required String courseCode}) => _guard(() =>
+      _client.rpc('assign_lecturer', params: {'p_email': email.trim(), 'p_course': courseCode.trim()}));
+
+  @override
+  Future<void> removeLecturer({required String courseCode, required String lecturerId}) => _guard(() => _client
+      .from('course_lecturers')
+      .delete()
+      .eq('course_code', courseCode)
+      .eq('lecturer_id', lecturerId));
+
+  // ------------------------------------------------------------- notifications
+  @override
+  Future<List<AppNotification>> notifications() => _guard(() async {
+        final rows = await _client
+            .from('notifications')
+            .select()
+            .eq('user_id', _uid)
+            .order('created_at', ascending: false)
+            .limit(60);
+        return rows.map(AppNotification.fromMap).toList();
+      });
+
+  @override
+  Stream<AppNotification> newNotifications() {
+    final ctrl = StreamController<AppNotification>();
+    RealtimeChannel? ch;
+    ctrl.onListen = () {
+      ch = _client
+          .channel('notes-$_uid')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.insert,
+            schema: 'public',
+            table: 'notifications',
+            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'user_id', value: _uid),
+            callback: (p) => ctrl.add(AppNotification.fromMap(p.newRecord)),
+          )
+          .subscribe();
+    };
+    ctrl.onCancel = () async {
+      if (ch != null) await _client.removeChannel(ch!);
+    };
+    return ctrl.stream;
+  }
+
+  @override
+  Future<void> markNotificationsRead() => _guard(() => _client
+      .from('notifications')
+      .update({'read_at': DateTime.now().toUtc().toIso8601String()})
+      .eq('user_id', _uid)
+      .isFilter('read_at', null));
 }

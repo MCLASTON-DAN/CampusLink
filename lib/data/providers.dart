@@ -97,3 +97,20 @@ final tutorCardsProvider = FutureProvider.autoDispose((ref) => ref.watch(communi
 
 final myTutorRequestsProvider =
     FutureProvider.autoDispose((ref) => ref.watch(communityProvider).myTutorRequests());
+
+// ---- course units, tutor reports, notifications ----
+final teachingUnitsProvider = FutureProvider.autoDispose((ref) {
+  ref.watch(currentUserProvider);
+  return ref.watch(communityProvider).myTeachingUnits();
+});
+final courseNoticesProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).courseNotices());
+final courseLecturersProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).courseLecturers());
+final tutorReportSummaryProvider =
+    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).tutorReportSummary());
+
+final notificationsProvider = FutureProvider.autoDispose((ref) {
+  ref.watch(currentUserProvider);
+  return ref.watch(communityProvider).notifications();
+});
+final unreadNotificationsProvider = Provider.autoDispose<int>(
+    (ref) => ref.watch(notificationsProvider).valueOrNull?.where((n) => !n.read).length ?? 0);

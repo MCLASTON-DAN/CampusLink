@@ -14,8 +14,31 @@ import 'repository.dart';
 class SupabaseRepository implements CampusRepository {
   SupabaseRepository(this._client) {
     community = SupabaseCommunity(_client, () => _user);
-    _client.auth.onAuthStateChange.listen((_) => _refreshProfile());
-    _refreshProfile();
+    _client.auth.onAuthStateChange.listen((s) {
+      // Token refreshes don't change who is signed in: skip the extra reload.
+      if (s.event == AuthChangeEvent.tokenRefreshed && _user != null) return;
+      _refreshProfile();
+    });
+    ready = _firstLoad();
+  }
+
+  /// Finishes once we know who is signed in, so the app never flashes the
+  /// sign-in page for someone who is already signed in (or just came back
+  /// from Google).
+  late final Future<void> ready;
+
+  Future<void> _firstLoad() async {
+    final fromGoogle = Uri.base.queryParameters.containsKey('code') || Uri.base.fragment.contains('access_token');
+    if (fromGoogle && _client.auth.currentSession == null) {
+      try {
+        await _client.auth.onAuthStateChange
+            .firstWhere((s) => s.session != null)
+            .timeout(const Duration(seconds: 8));
+      } catch (_) {/* sign-in failed or slow: show the sign-in page */}
+    }
+    try {
+      await _refreshProfile().timeout(const Duration(seconds: 8));
+    } catch (_) {}
   }
 
   final SupabaseClient _client;
@@ -33,8 +56,21 @@ class SupabaseRepository implements CampusRepository {
       _userCtrl.add(null);
       return;
     }
-    final row = await _client.from('profiles').select().eq('id', u.id).maybeSingle();
-    _user = row == null ? Profile(id: u.id, fullName: u.email ?? '') : Profile.fromMap(row);
+    try {
+      final row = await _client.from('profiles').select().eq('id', u.id).maybeSingle();
+      // Badge and office come from the public view (they are worked out, not stored).
+      final pub = await _client
+          .from('public_profiles')
+          .select('badge, office_title, office_name')
+          .eq('id', u.id)
+          .maybeSingle();
+      _user = row == null
+          ? Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '')
+          : Profile.fromMap({...row, if (pub != null) ...pub});
+    } catch (_) {
+      // Offline for a moment: stay signed in with what we know.
+      _user ??= Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '');
+    }
     _userCtrl.add(_user);
   }
 
@@ -109,6 +145,9 @@ class SupabaseRepository implements CampusRepository {
       'is_tutor': p.isTutor,
       'tutor_subjects': p.tutorSubjects,
       'is_buddy_mentor': p.isBuddyMentor,
+      'avatar_path': p.avatarPath,
+      'status_text': p.statusText,
+      'status_until': p.statusUntil?.toUtc().toIso8601String(),
     }).eq('id', p.id);
     await _refreshProfile();
     return _user!;

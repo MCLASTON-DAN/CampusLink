@@ -1,4 +1,6 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
+import 'package:share_plus/share_plus.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -12,6 +14,7 @@ import '../../widgets/common.dart';
 import '../../widgets/media.dart';
 import '../../core/image_tools.dart';
 import 'policy_gate.dart';
+import '../../core/config.dart';
 
 const _filters = <String?, String>{
   null: 'All',
@@ -225,6 +228,7 @@ class PostDetailScreen extends ConsumerStatefulWidget {
 class _PostDetailState extends ConsumerState<PostDetailScreen> {
   Post? _post;
   bool _loading = true;
+  int? _views; // only filled for the posting office and admins
 
   @override
   void initState() {
@@ -233,11 +237,18 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
   }
 
   Future<void> _load() async {
-    final p = await ref.read(communityProvider).post(widget.postId);
+    final api = ref.read(communityProvider);
+    final p = await api.post(widget.postId);
     if (mounted) setState(() {
       _post = p;
       _loading = false;
     });
+    if (p == null) return;
+    await api.recordView(p.id);
+    try {
+      final v = await api.viewCount(p.id);
+      if (mounted) setState(() => _views = v);
+    } catch (_) {}
   }
 
   @override
@@ -245,7 +256,10 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
     final p = _post;
     final me = ref.watch(currentUserProvider).valueOrNull;
     return Scaffold(
-      appBar: AppBar(title: const Text('News')),
+      appBar: AppBar(title: const Text('News'), actions: [
+        if (p != null)
+          IconButton(tooltip: 'Share', icon: const Icon(Icons.share_rounded), onPressed: () => sharePost(context, p)),
+      ]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : p == null
@@ -258,6 +272,19 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
                   NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: Theme.of(context).textTheme.titleSmall),
                   Text('${p.kindLabel} · ${friendlyDate(p.publishedAt)}${p.isEdited ? ' · edited' : ''}',
                       style: Theme.of(context).textTheme.bodySmall),
+                  if (_views != null)
+                    Tooltip(
+                      message: 'Only your office and administrators can see this number.',
+                      child: Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Row(children: [
+                          const Icon(Icons.visibility_outlined, size: 16),
+                          const SizedBox(width: 4),
+                          Text('$_views ${_views == 1 ? 'person has' : 'people have'} opened this · visible to your office only',
+                              style: Theme.of(context).textTheme.bodySmall),
+                        ]),
+                      ),
+                    ),
                   const SizedBox(height: 10),
                   Text(p.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
                   const SizedBox(height: 10),
@@ -559,6 +586,25 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
               padding: EdgeInsets.only(top: 6),
               child: Text('A clarification answers a rumour with facts. Say exactly what is true and show the proof.')),
         const SizedBox(height: 8),
+        Card(
+          color: Theme.of(context).colorScheme.primaryContainer.withValues(alpha: 0.4),
+          child: ListTile(
+            leading: const Icon(Icons.auto_awesome_rounded),
+            title: const Text('Write with the story guide'),
+            subtitle: const Text('Answer a few short questions and we build a clear, well-structured story for you.'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              final r = await showStoryGuide(context);
+              if (r == null) return;
+              setState(() {
+                _title.text = r.$1;
+                _body.text = r.$2;
+                if (r.$3.isNotEmpty && _source.text.trim().isEmpty) _source.text = r.$3;
+              });
+            },
+          ),
+        ),
+        const SizedBox(height: 8),
         TextField(controller: _title, decoration: const InputDecoration(labelText: 'Title')),
         const SizedBox(height: 8),
         TextField(controller: _body, minLines: 5, maxLines: 12, decoration: const InputDecoration(labelText: 'Message')),
@@ -620,5 +666,189 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
       if (mounted) showSnack(context, e.message);
     }
     if (mounted) setState(() => _busy = false);
+  }
+}
+
+
+/// Share a post as a short preview card plus a link back to CampusLink.
+/// The full article stays on CampusLink, which discourages copying.
+Future<void> sharePost(BuildContext context, Post p) {
+  final link = '${AppConfig.webUrl}/news/${p.id}';
+  final clean = p.body.replaceAll(RegExp(r'\s+'), ' ').trim();
+  final excerpt = clean.length > 180 ? '${clean.substring(0, 180).trimRight()}…' : clean;
+  final text = '📰 ${p.title}\n${p.byline} · ${friendlyDate(p.publishedAt)}\n\n$excerpt\n\nRead the full story on CampusLink:\n$link';
+  return showModalBottomSheet(
+    context: context,
+    showDragHandle: true,
+    isScrollControlled: true,
+    builder: (sheet) => SafeArea(
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(16, 0, 16, 16),
+        child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('Share this post', style: Theme.of(sheet).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+          const SizedBox(height: 12),
+          Card(
+            clipBehavior: Clip.antiAlias,
+            child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (MediaBanner.has(coverUrl: p.coverPath, videoUrl: p.videoUrl))
+                SizedBox(height: 140, child: MediaBanner(coverUrl: p.coverPath, videoUrl: p.videoUrl, radius: 0)),
+              Padding(
+                padding: const EdgeInsets.all(14),
+                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                  NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: Theme.of(sheet).textTheme.labelLarge),
+                  const SizedBox(height: 6),
+                  Text(p.title, style: Theme.of(sheet).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+                  const SizedBox(height: 6),
+                  Text(excerpt, maxLines: 4, overflow: TextOverflow.ellipsis),
+                  const SizedBox(height: 8),
+                  Text('Full story on CampusLink', style: TextStyle(color: Theme.of(sheet).colorScheme.primary, fontWeight: FontWeight.w600)),
+                ]),
+              ),
+            ]),
+          ),
+          const SizedBox(height: 8),
+          const Text('Only this preview and the link are shared. Readers open CampusLink for the full story.',
+              style: TextStyle(fontSize: 12)),
+          const SizedBox(height: 12),
+          FilledButton.icon(
+            icon: const Icon(Icons.share_rounded),
+            label: const Text('Share (WhatsApp, etc.)'),
+            onPressed: () async {
+              Navigator.pop(sheet);
+              try {
+                await SharePlus.instance.share(ShareParams(text: text, subject: p.title));
+              } catch (_) {
+                await Clipboard.setData(ClipboardData(text: text));
+                if (context.mounted) showSnack(context, 'Copied. Paste it into WhatsApp or anywhere.');
+              }
+            },
+          ),
+          TextButton.icon(
+            icon: const Icon(Icons.copy_rounded),
+            label: const Text('Copy link'),
+            onPressed: () async {
+              await Clipboard.setData(ClipboardData(text: link));
+              if (sheet.mounted) Navigator.pop(sheet);
+              if (context.mounted) showSnack(context, 'Link copied');
+            },
+          ),
+        ]),
+      ),
+    ),
+  );
+}
+
+
+/// A guided template for writers: who, what, when, where, why, a quote and
+/// what readers should do. Returns (title, body, source).
+Future<(String, String, String)?> showStoryGuide(BuildContext context) {
+  return Navigator.of(context).push<(String, String, String)>(
+    MaterialPageRoute(fullscreenDialog: true, builder: (_) => const _StoryGuide()),
+  );
+}
+
+class _StoryGuide extends StatefulWidget {
+  const _StoryGuide();
+  @override
+  State<_StoryGuide> createState() => _StoryGuideState();
+}
+
+class _StoryGuideState extends State<_StoryGuide> {
+  final _c = {
+    for (final k in ['headline', 'who', 'what', 'when', 'where', 'why', 'details', 'quote', 'quoteBy', 'action', 'contact', 'source'])
+      k: TextEditingController(),
+  };
+  String _type = 'news';
+
+  String v(String k) => _c[k]!.text.trim();
+
+  String _sentence(String s) {
+    if (s.isEmpty) return s;
+    final t = s[0].toUpperCase() + s.substring(1);
+    return RegExp(r'[.!?]$').hasMatch(t) ? t : '$t.';
+  }
+
+  (String, String, String) _build() {
+    final lead = _sentence([
+      if (v('who').isNotEmpty) v('who'),
+      if (v('what').isNotEmpty) v('what'),
+      if (v('when').isNotEmpty) 'on ${v('when')}',
+      if (v('where').isNotEmpty) 'at ${v('where')}',
+    ].join(' '));
+    final parts = <String>[
+      if (lead.isNotEmpty) lead,
+      if (v('why').isNotEmpty) _sentence(v('why')),
+      if (v('details').isNotEmpty) v('details'),
+      if (v('quote').isNotEmpty) '“${v('quote')}”${v('quoteBy').isEmpty ? '' : ' — ${v('quoteBy')}'}',
+      if (v('action').isNotEmpty) '${_type == 'notice' ? 'What you need to do' : 'What this means for you'}: ${_sentence(v('action'))}',
+      if (v('contact').isNotEmpty) 'For more information: ${v('contact')}',
+    ];
+    var title = v('headline');
+    if (title.isEmpty) title = lead.length > 90 ? '${lead.substring(0, 90)}…' : lead.replaceAll(RegExp(r'\.$'), '');
+    return (title, parts.join('\n\n'), v('source'));
+  }
+
+  Widget _f(String k, String label, {String? hint, int lines = 1, bool required = false}) => Padding(
+        padding: const EdgeInsets.only(bottom: 10),
+        child: TextField(
+          controller: _c[k],
+          minLines: lines,
+          maxLines: lines == 1 ? 1 : lines + 3,
+          onChanged: (_) => setState(() {}),
+          decoration: InputDecoration(labelText: required ? '$label *' : label, hintText: hint, alignLabelWithHint: lines > 1),
+        ),
+      );
+
+  @override
+  Widget build(BuildContext context) {
+    final preview = _build();
+    final ready = v('what').isNotEmpty && (v('headline').isNotEmpty || v('who').isNotEmpty);
+    return Scaffold(
+      appBar: AppBar(title: const Text('Story guide')),
+      body: PageBody(maxWidth: 760, children: [
+        SegmentedButton<String>(
+          segments: const [
+            ButtonSegment(value: 'news', label: Text('News story'), icon: Icon(Icons.newspaper_rounded)),
+            ButtonSegment(value: 'notice', label: Text('Notice'), icon: Icon(Icons.campaign_rounded)),
+          ],
+          selected: {_type},
+          onSelectionChanged: (x) => setState(() => _type = x.first),
+        ),
+        const SizedBox(height: 12),
+        _f('headline', 'Headline', hint: 'Library opens 24 hours during exams'),
+        _f('who', 'Who', hint: 'The University Library', required: true),
+        _f('what', 'What happened / will happen', hint: 'will open 24 hours a day', required: true),
+        _f('when', 'When', hint: 'Monday 1 December'),
+        _f('where', 'Where', hint: 'the Main Library, Block A'),
+        _f('why', 'Why it matters', hint: 'Students asked for more quiet study space before exams.', lines: 2),
+        _f('details', 'More details', lines: 3),
+        _f('quote', 'A quote (optional)', hint: 'We want every student to have a quiet place to revise.'),
+        _f('quoteBy', 'Who said it', hint: 'Head Librarian'),
+        _f('action', _type == 'notice' ? 'What students must do' : 'What students can do', hint: 'Bring your student ID after 8 pm.', lines: 2),
+        _f('contact', 'Contact for questions', hint: 'library@cavendish.ac.ug'),
+        _f('source', 'Where this information comes from', hint: 'Memo from the University Librarian, 20 Nov 2026'),
+        const SizedBox(height: 8),
+        Text('Preview', style: Theme.of(context).textTheme.titleSmall),
+        const SizedBox(height: 6),
+        Card(
+          child: Padding(
+            padding: const EdgeInsets.all(14),
+            child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text(preview.$1.isEmpty ? 'Your headline' : preview.$1,
+                  style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w800)),
+              const SizedBox(height: 8),
+              Text(preview.$2.isEmpty ? 'Your story will appear here as you type.' : preview.$2),
+            ]),
+          ),
+        ),
+        const SizedBox(height: 12),
+        FilledButton(
+          onPressed: ready ? () => Navigator.pop(context, _build()) : null,
+          child: const Text('Use this story'),
+        ),
+        const SizedBox(height: 4),
+        const Text('You can still edit everything before posting.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
+      ]),
+    );
   }
 }

@@ -2,6 +2,9 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../notifications/notifications.dart';
+import '../../widgets/media.dart';
+
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
@@ -53,14 +56,24 @@ class HomeScreen extends ConsumerWidget {
                     style: t.headlineSmall, maxLines: 1, overflow: TextOverflow.ellipsis),
               ]),
             ),
+            const NotificationBell(),
+            const SizedBox(width: 4),
             InkWell(
               customBorder: const CircleBorder(),
               onTap: () => context.go('/profile'),
-              child: CircleAvatar(
-                radius: 22,
-                backgroundColor: s.primary.withValues(alpha: 0.12),
-                child: Text(firstName.isEmpty ? '?' : firstName[0].toUpperCase(),
-                    style: TextStyle(color: s.primary, fontWeight: FontWeight.w900)),
+              child: ClipOval(
+                child: SizedBox(
+                  width: 44,
+                  height: 44,
+                  child: user?.avatarPath != null
+                      ? NetPicture(user!.avatarPath!)
+                      : Container(
+                          color: s.primary.withValues(alpha: 0.12),
+                          alignment: Alignment.center,
+                          child: Text(firstName.isEmpty ? '?' : firstName[0].toUpperCase(),
+                              style: TextStyle(color: s.primary, fontWeight: FontWeight.w900)),
+                        ),
+                ),
               ),
             ),
           ]),

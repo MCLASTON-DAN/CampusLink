@@ -22,9 +22,9 @@ const _dests = [
   _Dest('/campus', 'Campus', Icons.explore_outlined, Icons.explore_rounded,
       ['/campus', '/where', '/map', '/directory', '/campuses', '/requests', '/lostfound', '/announcements', '/engage']),
   _Dest('/study', 'Study', Icons.school_outlined, Icons.school_rounded,
-      ['/study', '/tutors', '/groups', '/timetable', '/buddy', '/pulse']),
+      ['/study', '/tutors', '/groups', '/timetable', '/buddy', '/pulse', '/courses']),
   _Dest('/profile', 'Me', Icons.person_outline_rounded, Icons.person_rounded,
-      ['/profile', '/community', '/members', '/reports', '/moderation', '/install']),
+      ['/profile', '/community', '/members', '/reports', '/moderation', '/install', '/notifications', '/tutor-reports']),
 ];
 
 /// Responsive scaffold: bottom bar on phones, nav rail on tablets/desktop/web.

@@ -34,7 +34,16 @@ class Profile {
   final bool tutorVerified; // earned from reviews, never set by hand
   final String? officeTitle; // e.g. "Minister of ICT" while in office
   final String? officeName; // e.g. "Guild Office"
-  final String? badge; // 'red' | 'green' | 'blue' | null
+  final String? badge; // 'red' | 'green' | 'purple' | 'blue' | null
+  final String? avatarPath; // file in the "avatars" bucket, or a data: URI in demo mode
+  final String? statusText; // short "how I'm feeling" note
+  final DateTime? statusUntil; // null = stays until removed
+
+  /// The status, or null once its time is up.
+  String? get liveStatus =>
+      statusText == null || statusText!.trim().isEmpty || (statusUntil != null && statusUntil!.isBefore(DateTime.now()))
+          ? null
+          : statusText;
 
   const Profile({
     required this.id,
@@ -51,6 +60,9 @@ class Profile {
     this.officeTitle,
     this.officeName,
     this.badge,
+    this.avatarPath,
+    this.statusText,
+    this.statusUntil,
   });
 
   bool get isStaff => role != UserRole.student;
@@ -71,6 +83,10 @@ class Profile {
     String? officeTitle,
     String? officeName,
     String? badge,
+    String? avatarPath,
+    String? statusText,
+    DateTime? statusUntil,
+    bool clearStatus = false,
   }) =>
       Profile(
         id: id,
@@ -87,6 +103,9 @@ class Profile {
         officeTitle: officeTitle ?? this.officeTitle,
         officeName: officeName ?? this.officeName,
         badge: badge ?? this.badge,
+        avatarPath: avatarPath ?? this.avatarPath,
+        statusText: clearStatus ? null : (statusText ?? this.statusText),
+        statusUntil: clearStatus ? null : (statusUntil ?? this.statusUntil),
       );
 
   factory Profile.fromMap(Map<String, dynamic> m) => Profile(
@@ -104,6 +123,9 @@ class Profile {
         officeTitle: m['office_title'],
         officeName: m['office_name'],
         badge: m['badge'],
+        avatarPath: m['avatar_path'],
+        statusText: m['status_text'],
+        statusUntil: m['status_until'] == null ? null : DateTime.parse(m['status_until'].toString()),
       );
 
   Map<String, dynamic> toMap() => {
@@ -121,6 +143,9 @@ class Profile {
         'office_title': officeTitle,
         'office_name': officeName,
         'badge': badge,
+        'avatar_path': avatarPath,
+        'status_text': statusText,
+        'status_until': statusUntil?.toIso8601String(),
       };
 }
 

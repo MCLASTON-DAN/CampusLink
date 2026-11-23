@@ -8,6 +8,9 @@ import 'data/providers.dart';
 import 'features/announcements/announcements_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/buddy/buddy_screen.dart';
+import 'features/community/policy_gate.dart';
+import 'features/courses/courses_screen.dart';
+import 'features/notifications/notifications.dart';
 import 'features/community/events_screens.dart';
 import 'features/community/map_screen.dart';
 import 'features/community/more_screens.dart';
@@ -47,7 +50,9 @@ final routerProvider = Provider<GoRouter>((ref) {
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
       ShellRoute(
-        builder: (context, state, child) => AppShell(location: state.matchedLocation, child: child),
+        builder: (context, state, child) =>
+            NotificationHost(
+                child: PolicyAcceptanceGate(child: AppShell(location: state.matchedLocation, child: child))),
         routes: [
           GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
           GoRoute(path: '/announcements', builder: (_, __) => const AnnouncementsScreen()),
@@ -79,6 +84,16 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/feed', builder: (_, s) => FeedScreen(initialTab: int.tryParse(s.uri.queryParameters['tab'] ?? '') ?? 0)),
           GoRoute(path: '/campus', builder: (_, __) => const CampusHubScreen()),
           GoRoute(path: '/install', builder: (_, __) => const InstallScreen()),
+          GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
+          GoRoute(path: '/tutor-reports', builder: (_, __) => const TutorReportsScreen()),
+          GoRoute(
+            path: '/courses',
+            builder: (_, __) => const CoursesScreen(),
+            routes: [
+              GoRoute(path: 'new', builder: (_, __) => const ComposeCourseNoticeScreen()),
+              GoRoute(path: 'lecturers', builder: (_, __) => const LecturersScreen()),
+            ],
+          ),
           GoRoute(path: '/pulse', builder: (_, __) => const PulseScreen()),
           GoRoute(path: '/buddy', builder: (_, __) => const BuddyScreen()),
           GoRoute(path: '/where', builder: (_, __) => const WhereScreen()),

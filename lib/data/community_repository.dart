@@ -130,6 +130,45 @@ abstract class CommunityApi {
   /// Uploads a small image (max 1 MB, JPEG/PNG/WebP) and returns its public link.
   Future<String> uploadImage(Uint8List bytes, {required String extension});
 
+  // ---- post views (count visible to the posting office and admins only) ----
+  Future<void> recordView(String postId);
+  /// null when this person is not allowed to see the number.
+  Future<int?> viewCount(String postId);
+
+  // ---- profile photo ----
+  /// Uploads a small square photo and returns its public link.
+  Future<String> uploadAvatar(Uint8List bytes);
+
+  // ---- tutor trust ----
+  /// Only students who had a lesson with the tutor can report them.
+  Future<void> reportTutor({required String tutorId, required String reason, required String details});
+  /// Staff only: reports per tutor and reason, with percentages.
+  Future<List<TutorReportRow>> tutorReportSummary();
+  /// Staff only: close all open reports for a tutor.
+  Future<void> closeTutorReports(String tutorId, {required bool upheld});
+
+  // ---- course units (lecturers) ----
+  /// Units I am assigned to teach (empty for students).
+  Future<List<String>> myTeachingUnits();
+  /// Notices for units in my timetable (or that I sent).
+  Future<List<CourseNotice>> courseNotices();
+  Future<void> sendCourseNotice({
+    required List<String> courseCodes,
+    required String title,
+    required String body,
+    String? linkUrl,
+    String priority = 'normal',
+  });
+  Future<List<CourseLecturer>> courseLecturers();
+  Future<void> assignLecturer({required String email, required String courseCode});
+  Future<void> removeLecturer({required String courseCode, required String lecturerId});
+
+  // ---- notifications ----
+  Future<List<AppNotification>> notifications();
+  /// New notifications as they arrive while the app is open.
+  Stream<AppNotification> newNotifications();
+  Future<void> markNotificationsRead();
+
   // ---- policies ----
   Future<bool> hasAccepted(String policy, String version);
   Future<void> accept(String policy, String version);

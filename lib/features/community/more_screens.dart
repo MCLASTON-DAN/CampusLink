@@ -441,7 +441,10 @@ class TutorsScreen extends ConsumerWidget {
         builder: (list) => ListView(padding: const EdgeInsets.all(12), children: [
           const Padding(
               padding: EdgeInsets.only(bottom: 8),
-              child: Text('Scores are fair: a few reviews count less. Only students who had a confirmed lesson can review. Blue tick = verified by many reviews.')),
+              child: Text('Tutors are year 2 or above and show the grade they got in each unit. '
+                  'Scores are fair: a few reviews count less, and only students who had a confirmed lesson can review. '
+                  'Levels grow with real lessons taught (New → Rising → Experienced → Expert). '
+                  'Blue tick = verified by many good reviews. It cannot be bought.')),
           if (list.isEmpty) const EmptyState(icon: Icons.school_outlined, title: 'No tutors yet'),
           for (final t in list)
             Card(
@@ -451,6 +454,7 @@ class TutorsScreen extends ConsumerWidget {
                   Wrap(spacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
                     NameWithBadge(t.name, t.verified ? 'blue' : null, style: Theme.of(context).textTheme.titleMedium),
                     if (t.reviews > 0) Text('★ ${t.score.toStringAsFixed(2)}  (${t.reviews})', style: const TextStyle(fontWeight: FontWeight.w700)) else const Text('No reviews yet'),
+                    _LevelChip(t.level, t.lessons),
                   ]),
                   if (t.bio.isNotEmpty) Text(t.bio),
                   if (t.availability.isNotEmpty) Text('Free: ${t.availability}', style: Theme.of(context).textTheme.bodySmall),
@@ -502,12 +506,23 @@ class MyLessonsScreen extends ConsumerWidget {
           if (list.isEmpty) const EmptyState(icon: Icons.inbox_rounded, title: 'No lessons yet'),
           for (final r in list)
             Card(
-              child: ListTile(
-                title: Text('${r.courseCode} · ${r.studentId == me?.id ? 'with ${r.tutorName}' : 'student ${r.studentName}'}'),
-                subtitle: Text('${r.message}\nStatus: ${r.status}'),
-                isThreeLine: true,
-                trailing: _actions(context, r, me?.id, api, refresh),
-              ),
+              child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                ListTile(
+                  title: Text('${r.courseCode} · ${r.studentId == me?.id ? 'with ${r.tutorName}' : 'student ${r.studentName}'}'),
+                  subtitle: Text('${r.message}\nStatus: ${r.status}'),
+                  isThreeLine: true,
+                  trailing: _actions(context, r, me?.id, api, refresh),
+                ),
+                if (r.studentId == me?.id && (r.status == 'accepted' || r.status == 'completed'))
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton.icon(
+                      onPressed: () => reportTutorDialog(context, api, tutorId: r.tutorId, tutorName: r.tutorName),
+                      icon: const Icon(Icons.flag_outlined, size: 18),
+                      label: const Text('Report this tutor'),
+                    ),
+                  ),
+              ]),
             ),
         ]),
       ),
@@ -564,7 +579,7 @@ class TutorProfileEditScreen extends ConsumerStatefulWidget {
 
 class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
   final _bio = TextEditingController(), _contact = TextEditingController(), _avail = TextEditingController();
-  final _mods = <(TextEditingController, TextEditingController)>[];
+  final _mods = <(TextEditingController, TextEditingController, TextEditingController)>[];
   @override
   void initState() {
     super.initState();
@@ -575,7 +590,7 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
         _contact.text = c.contact ?? '';
         _avail.text = c.availability;
         for (final m in c.modules) {
-          _mods.add((TextEditingController(text: m.courseCode), TextEditingController(text: '${m.priceUgx}')));
+          _mods.add((TextEditingController(text: m.courseCode), TextEditingController(text: '${m.priceUgx}'), TextEditingController(text: m.grade ?? '')));
         }
       });
     });
@@ -585,18 +600,32 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
   Widget build(BuildContext context) => Scaffold(
         appBar: AppBar(title: const Text('My tutor profile')),
         body: ListView(padding: const EdgeInsets.all(16), children: [
-          TextField(controller: _bio, maxLines: 3, decoration: const InputDecoration(labelText: 'About you')),
+          Card(
+            color: Theme.of(context).colorScheme.secondaryContainer.withValues(alpha: 0.4),
+            child: const Padding(
+              padding: EdgeInsets.all(12),
+              child: Text('To appear as a tutor you must:\n'
+                  '• be in year 2 or above (set your year in Me → Edit details),\n'
+                  '• write at least 40 characters about yourself,\n'
+                  '• give the grade you got in each unit you teach.\n'
+                  'Students can report tutors. Your level grows with every lesson students confirm.'),
+            ),
+          ),
+          const SizedBox(height: 8),
+          TextField(controller: _bio, maxLines: 3, maxLength: 600, decoration: const InputDecoration(labelText: 'About you (40+ characters)')),
           TextField(controller: _avail, decoration: const InputDecoration(labelText: 'When are you free?')),
           TextField(controller: _contact, decoration: const InputDecoration(labelText: 'WhatsApp number (optional, shown to students)')),
           const SizedBox(height: 12),
           const Text('Modules and price per hour'),
           for (final m in _mods)
             Row(children: [
-              Expanded(child: TextField(controller: m.$1, decoration: const InputDecoration(labelText: 'Course code'))),
+              Expanded(flex: 3, child: TextField(controller: m.$1, decoration: const InputDecoration(labelText: 'Unit code'))),
               const SizedBox(width: 8),
-              Expanded(child: TextField(controller: m.$2, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'UGX / hour'))),
+              Expanded(flex: 2, child: TextField(controller: m.$3, decoration: const InputDecoration(labelText: 'Your grade'))),
+              const SizedBox(width: 8),
+              Expanded(flex: 3, child: TextField(controller: m.$2, keyboardType: TextInputType.number, decoration: const InputDecoration(labelText: 'UGX / hour'))),
             ]),
-          TextButton.icon(onPressed: () => setState(() => _mods.add((TextEditingController(), TextEditingController()))), icon: const Icon(Icons.add), label: const Text('Add module')),
+          TextButton.icon(onPressed: () => setState(() => _mods.add((TextEditingController(), TextEditingController(), TextEditingController()))), icon: const Icon(Icons.add), label: const Text('Add module')),
           FilledButton(
             onPressed: () async {
               await _run(context, () async {
@@ -606,7 +635,7 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
                       availability: _avail.text,
                       modules: [
                         for (final m in _mods.where((m) => m.$1.text.trim().isNotEmpty))
-                          TutorModule(id: '', courseCode: m.$1.text, priceUgx: (int.tryParse(m.$2.text.trim().replaceAll(',', '')) ?? 0).clamp(0, 500000)),
+                          TutorModule(id: '', courseCode: m.$1.text.trim().toUpperCase(), grade: m.$3.text.trim().isEmpty ? null : m.$3.text.trim(), priceUgx: (int.tryParse(m.$2.text.trim().replaceAll(',', '')) ?? 0).clamp(0, 500000)),
                       ],
                     );
                 ref.invalidate(tutorCardsProvider);
@@ -784,3 +813,147 @@ class _MembersState extends ConsumerState<MembersScreen> {
 }
 
 final _publishersProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).publishers());
+
+
+class _LevelChip extends StatelessWidget {
+  const _LevelChip(this.level, this.lessons);
+  final String level;
+  final int lessons;
+  @override
+  Widget build(BuildContext context) {
+    final c = switch (level) {
+      'Expert' => const Color(0xFF7C3AED),
+      'Experienced' => const Color(0xFF059669),
+      'Rising' => const Color(0xFF0EA5E9),
+      _ => const Color(0xFF64748B),
+    };
+    return Tooltip(
+      message: '$lessons lessons taught and confirmed by students',
+      child: Container(
+        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+        decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+        child: Text('$level · $lessons lessons', style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12)),
+      ),
+    );
+  }
+}
+
+/// Lets a student report a tutor they had a lesson with.
+Future<void> reportTutorDialog(BuildContext context, CommunityApi api,
+    {required String tutorId, required String tutorName}) async {
+  var reason = 'no_show';
+  final details = TextEditingController();
+  final ok = await showDialog<bool>(
+    context: context,
+    builder: (ctx) => StatefulBuilder(
+      builder: (ctx, set) => AlertDialog(
+        title: Text('Report $tutorName'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            const Text('Staff review every report. Your name is not shown to the tutor.'),
+            const SizedBox(height: 8),
+            for (final e in tutorReportReasons.entries)
+              RadioListTile<String>(
+                value: e.key,
+                groupValue: reason,
+                onChanged: (v) => set(() => reason = v!),
+                title: Text(e.value),
+                dense: true,
+                contentPadding: EdgeInsets.zero,
+              ),
+            TextField(
+              controller: details,
+              minLines: 3,
+              maxLines: 6,
+              maxLength: 600,
+              decoration: const InputDecoration(labelText: 'What happened?', alignLabelWithHint: true),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send report')),
+        ],
+      ),
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  if (details.text.trim().length < 10) {
+    ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Please explain in at least 10 characters.')));
+    return;
+  }
+  await _run(context, () => api.reportTutor(tutorId: tutorId, reason: reason, details: details.text),
+      ok: 'Report sent. Thank you.');
+}
+
+/// Staff view: who is reported, how often and for what (as a share of all their reports).
+class TutorReportsScreen extends ConsumerWidget {
+  const TutorReportsScreen({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    return Scaffold(
+      appBar: AppBar(title: const Text('Tutor reports')),
+      body: AsyncBody(
+        value: ref.watch(tutorReportSummaryProvider),
+        onRetry: () => ref.invalidate(tutorReportSummaryProvider),
+        builder: (rows) {
+          final byTutor = <String, List<TutorReportRow>>{};
+          for (final r in rows) {
+            byTutor.putIfAbsent(r.tutorId, () => []).add(r);
+          }
+          return ListView(padding: const EdgeInsets.all(12), children: [
+            const Text('A tutor with open reports from 3 or more different students is hidden from the tutor list '
+                'until you decide. Uphold = the reports were right. Dismiss = they were not.'),
+            const SizedBox(height: 8),
+            if (byTutor.isEmpty) const EmptyState(icon: Icons.verified_user_outlined, title: 'No tutor reports'),
+            for (final e in byTutor.entries)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Text(e.value.first.tutorName, style: Theme.of(context).textTheme.titleMedium?.copyWith(fontWeight: FontWeight.w700)),
+                    Text('${e.value.first.total} reports from ${e.value.first.reporters} students · ${e.value.first.open} open'
+                        '${e.value.first.reporters >= 3 && e.value.first.open > 0 ? ' · HIDDEN FROM LIST' : ''}'),
+                    const SizedBox(height: 10),
+                    for (final r in e.value) ...[
+                      Row(children: [
+                        Expanded(child: Text(tutorReportReasons[r.reason] ?? r.reason)),
+                        Text('${r.pct.toStringAsFixed(0)}% (${r.n})', style: const TextStyle(fontWeight: FontWeight.w700)),
+                      ]),
+                      const SizedBox(height: 4),
+                      ClipRRect(
+                        borderRadius: BorderRadius.circular(4),
+                        child: LinearProgressIndicator(
+                          value: r.pct / 100,
+                          minHeight: 8,
+                          color: r.reason == 'harassment' ? Colors.red : Theme.of(context).colorScheme.primary,
+                        ),
+                      ),
+                      const SizedBox(height: 8),
+                    ],
+                    if (e.value.first.open > 0)
+                      Row(mainAxisAlignment: MainAxisAlignment.end, children: [
+                        TextButton(
+                          onPressed: () async {
+                            await _run(context, () => ref.read(communityProvider).closeTutorReports(e.key, upheld: false), ok: 'Dismissed');
+                            ref.invalidate(tutorReportSummaryProvider);
+                          },
+                          child: const Text('Dismiss'),
+                        ),
+                        FilledButton(
+                          onPressed: () async {
+                            await _run(context, () => ref.read(communityProvider).closeTutorReports(e.key, upheld: true), ok: 'Upheld');
+                            ref.invalidate(tutorReportSummaryProvider);
+                          },
+                          child: const Text('Uphold'),
+                        ),
+                      ]),
+                  ]),
+                ),
+              ),
+          ]);
+        },
+      ),
+    );
+  }
+}

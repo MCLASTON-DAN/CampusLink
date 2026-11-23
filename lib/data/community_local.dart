@@ -48,7 +48,8 @@ class LocalCommunity implements CommunityApi {
     final now = DateTime.now();
     final admin = {'id': 'pub-admin', 'kind': 'administration', 'name': 'Cavendish University Uganda Administration'};
     final guild = {'id': 'pub-guild', 'kind': 'guild', 'name': 'Cavendish University Guild Office'};
-    _s['publishers'] = [admin, guild];
+    final press = {'id': 'pub-press', 'kind': 'press', 'name': 'Cavendish Campus Newsroom'};
+    _s['publishers'] = [admin, guild, press];
     _s['members'] = <Map<String, dynamic>>[];
     _s['comments'] = <Map<String, dynamic>>[];
     _s['likes'] = <String>[];
@@ -198,9 +199,19 @@ class LocalCommunity implements CommunityApi {
           e.contains('president') ? 'Guild President (demo)' : 'Minister of ICT (demo)',
           [...all, if (e.contains('president')) 'manage_members']);
     }
+    if (e.contains('press') || e.contains('news')) {
+      add('pub-press', 'Cavendish Campus Newsroom', 'press', 'Campus reporter (demo)', ['news']);
+    }
     _put('members', members);
     _save();
-    return p.copyWith(role: role);
+    final badge = role == UserRole.superAdmin || e.contains('admin')
+        ? 'red'
+        : e.contains('guild') || e.contains('president')
+            ? 'green'
+            : (e.contains('press') || e.contains('news'))
+                ? 'purple'
+                : null;
+    return p.copyWith(role: role, badge: badge);
   }
 
   // ------------------------------------------------------------- identity
@@ -992,6 +1003,181 @@ class LocalCommunity implements CommunityApi {
     final key = '${_me.id}|$policy|$version';
     if (!a.contains(key)) a.add(key);
     _s['acceptances'] = a;
+    await _save();
+  }
+
+  // ---------------------------------------------------------------- views
+  @override
+  Future<void> recordView(String postId) async {
+    final v = Map<String, dynamic>.from(_s['views'] as Map? ?? {});
+    final who = List<String>.from(v[postId] ?? const []);
+    if (!who.contains(_me.id)) who.add(_me.id);
+    v[postId] = who;
+    _s['views'] = v;
+    await _save();
+  }
+
+  @override
+  Future<int?> viewCount(String postId) async {
+    final post = _list('posts').where((p) => p['id'] == postId).firstOrNull;
+    final mine = post != null &&
+        (post['author_id'] == _me.id ||
+            _list('members').any((m) => m['user_id'] == _me.id && m['publisher_id'] == post['publisher_id']));
+    if (!mine && !_me.isStaff) return null;
+    return _tick(((_s['views'] as Map? ?? {})[postId] as List? ?? const []).length);
+  }
+
+  // ---------------------------------------------------------------- avatar
+  @override
+  Future<String> uploadAvatar(Uint8List bytes) async {
+    if (bytes.length > 200 * 1024) throw CommunityException('In demo mode photos must be under 200 KB.');
+    return 'data:image/jpeg;base64,${base64Encode(bytes)}';
+  }
+
+  // ---------------------------------------------------------------- tutor trust
+  @override
+  Future<void> reportTutor({required String tutorId, required String reason, required String details}) async {
+    if (details.trim().length < 10) throw CommunityException('Please explain in at least 10 characters.');
+    final r = _list('tutorReports');
+    if (r.any((x) => x['tutor_id'] == tutorId && x['reporter_id'] == _me.id && x['status'] == 'open')) {
+      throw CommunityException('You already have an open report about this tutor.');
+    }
+    r.add({'tutor_id': tutorId, 'reporter_id': _me.id, 'reason': reason, 'details': details, 'status': 'open'});
+    _put('tutorReports', r);
+    await _save();
+  }
+
+  @override
+  Future<List<TutorReportRow>> tutorReportSummary() async {
+    final r = _list('tutorReports');
+    final out = <TutorReportRow>[];
+    final byTutor = <String, List<Map<String, dynamic>>>{};
+    for (final x in r) {
+      byTutor.putIfAbsent(x['tutor_id'], () => []).add(x);
+    }
+    byTutor.forEach((tid, rows) {
+      final name = SeedData.tutors.where((t) => t.id == tid).map((t) => t.fullName).firstOrNull ?? 'Tutor';
+      final reasons = <String, int>{};
+      for (final x in rows) {
+        reasons[x['reason']] = (reasons[x['reason']] ?? 0) + 1;
+      }
+      reasons.forEach((reason, n) => out.add(TutorReportRow(
+            tutorId: tid,
+            tutorName: name,
+            reason: reason,
+            n: n,
+            pct: 100 * n / rows.length,
+            total: rows.length,
+            reporters: rows.map((x) => x['reporter_id']).toSet().length,
+            open: rows.where((x) => x['status'] == 'open').length,
+          )));
+    });
+    return _tick(out);
+  }
+
+  @override
+  Future<void> closeTutorReports(String tutorId, {required bool upheld}) async {
+    final r = _list('tutorReports');
+    for (final x in r) {
+      if (x['tutor_id'] == tutorId && x['status'] == 'open') x['status'] = upheld ? 'upheld' : 'dismissed';
+    }
+    _put('tutorReports', r);
+    await _save();
+  }
+
+  // ---------------------------------------------------------------- course units
+  @override
+  Future<List<String>> myTeachingUnits() => _tick(_list('lecturers')
+      .where((l) => l['lecturer_id'] == _me.id)
+      .map((l) => l['course_code'] as String)
+      .toList());
+
+  @override
+  Future<List<CourseNotice>> courseNotices() =>
+      _tick(_list('courseNotices').map(CourseNotice.fromMap).toList().reversed.toList());
+
+  @override
+  Future<void> sendCourseNotice({
+    required List<String> courseCodes,
+    required String title,
+    required String body,
+    String? linkUrl,
+    String priority = 'normal',
+  }) async {
+    final mine = await myTeachingUnits();
+    final codes = courseCodes.map((c) => c.toUpperCase().replaceAll(RegExp(r'\s+'), '')).toSet().toList();
+    if (!_me.isStaff && codes.any((c) => !mine.contains(c))) {
+      throw CommunityException('You can only send notices to units you are assigned to teach.');
+    }
+    final n = CourseNotice(
+      id: _uuid.v4(),
+      lecturerId: _me.id,
+      lecturerName: _me.fullName,
+      courseCodes: codes,
+      title: title.trim(),
+      body: body.trim(),
+      linkUrl: (linkUrl ?? '').trim().isEmpty ? null : linkUrl,
+      priority: priority,
+      createdAt: DateTime.now(),
+    );
+    _put('courseNotices', [..._list('courseNotices'), n.toMap()]);
+    await _save();
+    _notify(AppNotification(
+        id: _uuid.v4(),
+        kind: 'course',
+        title: '${codes.join(', ')}: ${n.title}',
+        body: n.body,
+        link: '/courses',
+        priority: priority,
+        createdAt: DateTime.now()));
+  }
+
+  @override
+  Future<List<CourseLecturer>> courseLecturers() => _tick(_list('lecturers')
+      .map((l) => CourseLecturer(courseCode: l['course_code'], lecturerId: l['lecturer_id'], name: l['name'] ?? ''))
+      .toList());
+
+  @override
+  Future<void> assignLecturer({required String email, required String courseCode}) async {
+    if (!_me.isStaff) throw CommunityException('Only staff can assign lecturers.');
+    // Demo mode has one person on the device, so the unit is assigned to you.
+    final code = courseCode.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+    final l = _list('lecturers')..removeWhere((x) => x['course_code'] == code && x['lecturer_id'] == _me.id);
+    l.add({'course_code': code, 'lecturer_id': _me.id, 'name': _me.fullName});
+    _put('lecturers', l);
+    await _save();
+  }
+
+  @override
+  Future<void> removeLecturer({required String courseCode, required String lecturerId}) async {
+    _put('lecturers',
+        _list('lecturers')..removeWhere((x) => x['course_code'] == courseCode && x['lecturer_id'] == lecturerId));
+    await _save();
+  }
+
+  // ---------------------------------------------------------------- notifications
+  final _noteCtrl = StreamController<AppNotification>.broadcast();
+
+  void _notify(AppNotification n) {
+    _put('notifications', [..._list('notifications'), n.toMap()..['read_at'] = null]);
+    _save();
+    _noteCtrl.add(n);
+  }
+
+  @override
+  Future<List<AppNotification>> notifications() =>
+      _tick(_list('notifications').map(AppNotification.fromMap).toList().reversed.toList());
+
+  @override
+  Stream<AppNotification> newNotifications() => _noteCtrl.stream;
+
+  @override
+  Future<void> markNotificationsRead() async {
+    final l = _list('notifications');
+    for (final n in l) {
+      n['read_at'] ??= DateTime.now().toIso8601String();
+    }
+    _put('notifications', l);
     await _save();
   }
 }
