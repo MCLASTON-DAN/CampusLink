@@ -42,6 +42,7 @@ dev_dependencies:
   flutter_test:
     sdk: flutter
   flutter_lints: ^5.0.0
+  flutter_launcher_icons: ^0.14.4
 
 flutter:
 
@@ -65,3 +66,21 @@ flutter:
   uses-material-design: true
   assets:
     - assets/
+
+# App icon for Android, iOS, Windows and macOS. Regenerate with:
+#   dart run flutter_launcher_icons
+flutter_launcher_icons:
+  image_path: "assets/icon/icon.png"
+  android: "launcher_icon"
+  adaptive_icon_background: "assets/icon/background.png"
+  adaptive_icon_foreground: "assets/icon/foreground.png"
+  min_sdk_android: 21
+  ios: true
+  remove_alpha_ios: true
+  windows:
+    generate: true
+    image_path: "assets/icon/icon.png"
+    icon_size: 256
+  macos:
+    generate: true
+    image_path: "assets/icon/icon.png"

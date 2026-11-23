@@ -14,7 +14,7 @@ bool get _supported =>
 Future<void> _init() async {
   if (_ready || !_supported) return;
   const settings = InitializationSettings(
-    android: AndroidInitializationSettings('@mipmap/ic_launcher'),
+    android: AndroidInitializationSettings('@drawable/ic_stat_campuslink'),
     iOS: DarwinInitializationSettings(requestAlertPermission: false, requestSoundPermission: false, requestBadgePermission: false),
     macOS: DarwinInitializationSettings(requestAlertPermission: false, requestSoundPermission: false, requestBadgePermission: false),
     linux: LinuxInitializationSettings(defaultActionName: 'Open'),
