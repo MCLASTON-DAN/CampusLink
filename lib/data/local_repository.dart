@@ -110,6 +110,7 @@ class LocalRepository implements CampusRepository {
       yearOfStudy: _user?.yearOfStudy ?? 2,
       faculty: 'FST',
       role: isStaff ? UserRole.staff : UserRole.student,
+      username: _user?.username ?? email.split('@').first.toLowerCase().replaceAll(RegExp(r'[^a-z0-9._]'), '.'),
     );
     final withRole = community.onSignIn(p, email);
     _setUser(withRole);
@@ -132,6 +133,7 @@ class LocalRepository implements CampusRepository {
       programme: programme,
       yearOfStudy: yearOfStudy,
       faculty: 'FST',
+      username: fullName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.'),
     );
     _setUser(p);
     return _tick(p);

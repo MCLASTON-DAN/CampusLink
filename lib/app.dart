@@ -33,12 +33,15 @@ import 'features/timetable/timetable_screen.dart';
 
 final _rootKey = GlobalKey<NavigatorState>();
 
+// The router is made ONCE. It used to be rebuilt every time the signed-in
+// profile changed (sign-in, token refresh, profile reload), which restarted
+// the whole app and made the screen flash 2-3 times after signing in.
 final routerProvider = Provider<GoRouter>((ref) {
-  final auth = ref.watch(currentUserProvider);
   return GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/home',
     redirect: (context, state) {
+      final auth = ref.read(currentUserProvider);
       if (auth.isLoading) return null;
       final signedIn = auth.valueOrNull != null;
       final onLogin = state.matchedLocation == '/login';
@@ -128,9 +131,15 @@ final routerProvider = Provider<GoRouter>((ref) {
   );
 });
 
+/// Re-checks the route only when someone signs in or out (not on every
+/// profile reload), so pages are not rebuilt for nothing.
 class _AuthNotifier extends ChangeNotifier {
   _AuthNotifier(Ref ref) {
-    ref.listen(currentUserProvider, (_, __) => notifyListeners());
+    ref.listen(currentUserProvider, (prev, next) {
+      final before = prev?.valueOrNull?.id;
+      final after = next.valueOrNull?.id;
+      if (before != after || (prev?.isLoading ?? true) != next.isLoading) notifyListeners();
+    });
   }
 }
 

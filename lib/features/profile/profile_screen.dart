@@ -40,7 +40,7 @@ class ProfileScreen extends ConsumerWidget {
                 ListTile(
                   leading: const Icon(Icons.edit_rounded),
                   title: const Text('Edit details'),
-                  subtitle: const Text('Name, student number, programme, year'),
+                  subtitle: const Text('Name, username, programme, year'),
                   onTap: () => _edit(context, ref, user),
                 ),
                 SwitchListTile(
@@ -88,7 +88,7 @@ class ProfileScreen extends ConsumerWidget {
               ActionTile(icon: Icons.install_mobile_rounded, title: 'Install the app', subtitle: 'Phone, tablet or computer', color: const Color(0xFF3B2DB3), onTap: () => context.push('/install')),
             ActionTile(icon: Icons.assignment_ind_rounded, title: 'My lessons', subtitle: 'Tutor requests and reviews', color: const Color(0xFF7C3AED), onTap: () => context.push('/tutors/mine')),
             ActionTile(icon: Icons.support_agent_rounded, title: 'My help requests', subtitle: 'Track what you asked', color: const Color(0xFFF97316), onTap: () => context.push('/requests')),
-            ActionTile(icon: Icons.gavel_rounded, title: 'Removal log', subtitle: 'Everything removed, and why', color: const Color(0xFF64748B), onTap: () => context.push('/moderation')),
+            ActionTile(icon: Icons.gavel_rounded, title: 'Public record', subtitle: 'Removals and office changes, with reasons', color: const Color(0xFF64748B), onTap: () => context.push('/moderation')),
             ActionTile(icon: Icons.notifications_rounded, title: 'Notifications', subtitle: 'Inbox and pop-up settings', color: const Color(0xFFDB2777), onTap: () => context.push('/notifications')),
             ActionTile(icon: Icons.menu_book_rounded, title: 'My course units', subtitle: 'Notices from your lecturers', color: const Color(0xFFF97316), onTap: () => context.push('/courses')),
             ActionTile(icon: Icons.privacy_tip_rounded, title: 'Privacy policy', subtitle: 'What we keep and why', color: const Color(0xFF0EA5E9), onTap: () => showPolicy(context, 'privacy')),
@@ -144,6 +144,7 @@ class ProfileScreen extends ConsumerWidget {
 
   Future<void> _edit(BuildContext context, WidgetRef ref, Profile user) async {
     final name = TextEditingController(text: user.fullName);
+    final uname = TextEditingController(text: user.username ?? '');
     final sn = TextEditingController(text: user.studentNumber ?? '');
     final prog = TextEditingController(text: user.programme ?? '');
     var year = user.yearOfStudy ?? 1;
@@ -157,7 +158,18 @@ class ProfileScreen extends ConsumerWidget {
             child: Column(mainAxisSize: MainAxisSize.min, children: [
               TextField(controller: name, decoration: const InputDecoration(labelText: 'Full name')),
               const SizedBox(height: 10),
-              TextField(controller: sn, decoration: const InputDecoration(labelText: 'Student number')),
+              TextField(
+                controller: uname,
+                maxLength: 20,
+                decoration: const InputDecoration(
+                  labelText: 'Username',
+                  prefixText: '@',
+                  helperText: 'Letters, numbers, dot and _. You can change it once every 30 days.',
+                  helperMaxLines: 2,
+                ),
+              ),
+              const SizedBox(height: 10),
+              TextField(controller: sn, decoration: const InputDecoration(labelText: 'Student number (optional)')),
               const SizedBox(height: 10),
               TextField(controller: prog, decoration: const InputDecoration(labelText: 'Programme')),
               const SizedBox(height: 10),
@@ -177,13 +189,23 @@ class ProfileScreen extends ConsumerWidget {
       ),
     );
     if (ok != true) return;
-    await ref.read(repositoryProvider).updateProfile(user.copyWith(
+    final u = uname.text.trim().toLowerCase().replaceAll('@', '');
+    if (u.isNotEmpty && !RegExp(r'^[a-z0-9._]{3,20}$').hasMatch(u)) {
+      if (context.mounted) showSnack(context, 'Usernames are 3–20 letters, numbers, dots or _.');
+      return;
+    }
+    try {
+      await ref.read(repositoryProvider).updateProfile(user.copyWith(
+          username: u.isEmpty ? null : u,
           fullName: name.text.trim(),
           studentNumber: sn.text.trim(),
           programme: prog.text.trim(),
           yearOfStudy: year,
         ));
-    if (context.mounted) showSnack(context, 'Profile updated');
+      if (context.mounted) showSnack(context, 'Profile updated');
+    } catch (e) {
+      if (context.mounted) showSnack(context, '$e'.replaceFirst('Exception: ', ''));
+    }
   }
 }
 
@@ -352,6 +374,8 @@ class _ProfileHeader extends ConsumerWidget {
                     child: VerifiedBadge(user.badge, size: 18),
                   ),
               ]),
+              if (user.username != null)
+                Text('@${user.username}', style: TextStyle(color: Colors.white.withValues(alpha: 0.95), fontWeight: FontWeight.w600)),
               if (user.officeTitle != null)
                 Text([user.officeTitle!, if (user.officeName != null) user.officeName!].join(' · '),
                     style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600)),

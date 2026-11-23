@@ -35,6 +35,7 @@ class Profile {
   final String? officeTitle; // e.g. "Minister of ICT" while in office
   final String? officeName; // e.g. "Guild Office"
   final String? badge; // 'red' | 'green' | 'purple' | 'blue' | null
+  final String? username; // @handle, unique; changeable once every 30 days
   final String? avatarPath; // file in the "avatars" bucket, or a data: URI in demo mode
   final String? statusText; // short "how I'm feeling" note
   final DateTime? statusUntil; // null = stays until removed
@@ -63,6 +64,7 @@ class Profile {
     this.avatarPath,
     this.statusText,
     this.statusUntil,
+    this.username,
   });
 
   bool get isStaff => role != UserRole.student;
@@ -84,6 +86,7 @@ class Profile {
     String? officeName,
     String? badge,
     String? avatarPath,
+    String? username,
     String? statusText,
     DateTime? statusUntil,
     bool clearStatus = false,
@@ -104,6 +107,7 @@ class Profile {
         officeName: officeName ?? this.officeName,
         badge: badge ?? this.badge,
         avatarPath: avatarPath ?? this.avatarPath,
+        username: username ?? this.username,
         statusText: clearStatus ? null : (statusText ?? this.statusText),
         statusUntil: clearStatus ? null : (statusUntil ?? this.statusUntil),
       );
@@ -124,6 +128,7 @@ class Profile {
         officeName: m['office_name'],
         badge: m['badge'],
         avatarPath: m['avatar_path'],
+        username: m['username'],
         statusText: m['status_text'],
         statusUntil: m['status_until'] == null ? null : DateTime.parse(m['status_until'].toString()),
       );
@@ -144,6 +149,7 @@ class Profile {
         'office_name': officeName,
         'badge': badge,
         'avatar_path': avatarPath,
+        'username': username,
         'status_text': statusText,
         'status_until': statusUntil?.toIso8601String(),
       };

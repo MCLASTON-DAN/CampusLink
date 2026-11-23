@@ -7,6 +7,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../data/community_models.dart';
 import '../../data/providers.dart';
 import '../../widgets/badge.dart';
+import '../../widgets/person_picker.dart';
 import '../../widgets/section.dart';
 
 /// Course-unit notices: from a lecturer to only the students taking that unit
@@ -265,17 +266,20 @@ class LecturersScreen extends ConsumerStatefulWidget {
 }
 
 class _LecturersState extends ConsumerState<LecturersScreen> {
-  final _email = TextEditingController();
   final _codes = TextEditingController();
+  PersonHit? _who;
   bool _busy = false;
 
   Future<void> _add() async {
     final codes = _codes.text.split(RegExp(r'[,\s]+')).where((c) => c.trim().length >= 3).toList();
-    if (_email.text.trim().isEmpty || codes.isEmpty) return;
+    if (_who == null || codes.isEmpty) {
+      ScaffoldMessenger.of(context).showSnackBar(const SnackBar(content: Text('Choose the lecturer and type at least one unit code.')));
+      return;
+    }
     setState(() => _busy = true);
     try {
       for (final c in codes) {
-        await ref.read(communityProvider).assignLecturer(email: _email.text, courseCode: c);
+        await ref.read(communityProvider).assignLecturer(userId: _who!.id, courseCode: c);
       }
       _codes.clear();
       ref.invalidate(courseLecturersProvider);
@@ -293,9 +297,20 @@ class _LecturersState extends ConsumerState<LecturersScreen> {
       appBar: AppBar(title: const Text('Lecturers and units')),
       body: PageBody(maxWidth: 760, children: [
         const Text('A lecturer gets the orange badge and can message the students of the units assigned here. '
-            'They must sign in to CampusLink once before you can add them.'),
+            'They must sign in to CampusLink once before you can find them.'),
         const SizedBox(height: 12),
-        TextField(controller: _email, keyboardType: TextInputType.emailAddress, decoration: const InputDecoration(labelText: 'Lecturer\'s email')),
+        Card(
+          child: ListTile(
+            leading: _who == null ? const Icon(Icons.person_search_rounded) : PersonAvatar(name: _who!.fullName, url: _who!.avatar),
+            title: Text(_who == null ? 'Choose the lecturer' : _who!.fullName),
+            subtitle: Text(_who == null ? 'Search by @username or name' : '@${_who!.username ?? ''}'),
+            trailing: const Icon(Icons.chevron_right_rounded),
+            onTap: () async {
+              final p = await pickPerson(context, ref.read(communityProvider), title: 'Find the lecturer');
+              if (p != null) setState(() => _who = p);
+            },
+          ),
+        ),
         const SizedBox(height: 8),
         TextField(controller: _codes, decoration: const InputDecoration(labelText: 'Unit codes', hintText: 'BDA1202, COM221')),
         const SizedBox(height: 12),

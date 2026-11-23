@@ -54,6 +54,9 @@ class Membership {
   final DateTime startsAt;
   final DateTime expiresAt;
   final DateTime? revokedAt;
+  final String? username;
+  final String? endKind; // null | early | removed
+  final String? endReason;
 
   const Membership({
     required this.id,
@@ -67,7 +70,16 @@ class Membership {
     required this.startsAt,
     required this.expiresAt,
     this.revokedAt,
+    this.username,
+    this.endKind,
+    this.endReason,
   });
+
+  /// 'active' | 'ended' (reached end date) | 'early' | 'removed'
+  String get state {
+    if (revokedAt != null) return endKind == 'removed' ? 'removed' : 'early';
+    return DateTime.now().isBefore(expiresAt) ? 'active' : 'ended';
+  }
 
   bool get isActive {
     final n = DateTime.now();
@@ -90,10 +102,16 @@ class Membership {
         startsAt: _dt(m['starts_at']),
         expiresAt: _dt(m['expires_at']),
         revokedAt: _dtn(m['revoked_at']),
+        username: m['username'],
+        endKind: m['end_kind'],
+        endReason: m['end_reason'],
       );
 
   Map<String, dynamic> toMap() => {
         'id': id,
+        'username': username,
+        'end_kind': endKind,
+        'end_reason': endReason,
         'publisher_id': publisherId,
         'publisher_name': publisherName,
         'publisher_kind': publisherKind,
@@ -783,6 +801,33 @@ class CourseNotice {
         'priority': priority,
         'created_at': createdAt.toIso8601String(),
       };
+}
+
+/// A person found by username or name, for appointing.
+class PersonHit {
+  PersonHit({
+    required this.id,
+    required this.fullName,
+    this.username,
+    this.programme,
+    this.year,
+    this.avatar,
+    this.badge,
+    this.officeTitle,
+  });
+  final String id, fullName;
+  final String? username, programme, avatar, badge, officeTitle;
+  final int? year;
+  factory PersonHit.fromMap(Map<String, dynamic> m) => PersonHit(
+        id: m['id'],
+        fullName: m['full_name'] ?? '',
+        username: m['username'],
+        programme: m['programme'],
+        year: m['year_of_study'],
+        avatar: m['avatar_path'],
+        badge: m['badge'],
+        officeTitle: m['office_title'],
+      );
 }
 
 class CourseLecturer {

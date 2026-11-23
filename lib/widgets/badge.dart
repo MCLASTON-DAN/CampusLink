@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 import 'package:flutter/material.dart';
 
 /// Tick in a circle. red = administration, green = guild (in office),
@@ -8,11 +10,11 @@ class VerifiedBadge extends StatelessWidget {
   final double size;
 
   static Color? _c(String? c) => switch (c) {
-        'red' => const Color(0xFFE53935),
-        'green' => const Color(0xFF2E9E5B),
-        'blue' => const Color(0xFF1E88E5),
+        'red' => const Color(0xFFE0245E),
+        'green' => const Color(0xFF14A44D),
+        'blue' => const Color(0xFF0095F6),
         'purple' => const Color(0xFF7C3AED),
-        'orange' => const Color(0xFFF97316),
+        'orange' => const Color(0xFFF2780C),
         _ => null,
       };
 
@@ -39,12 +41,9 @@ class VerifiedBadge extends StatelessWidget {
             actions: [TextButton(onPressed: () => Navigator.pop(dialogContext), child: const Text('OK'))],
           ),
         ),
-        child: Container(
-          width: size,
-          height: size,
-          margin: const EdgeInsets.only(left: 4),
-          decoration: BoxDecoration(color: col, shape: BoxShape.circle),
-          child: Icon(Icons.check_rounded, color: Colors.white, size: size * 0.72),
+        child: Padding(
+          padding: const EdgeInsets.only(left: 4),
+          child: SizedBox.square(dimension: size, child: CustomPaint(painter: _RosettePainter(col))),
         ),
       ),
     );
@@ -66,4 +65,55 @@ class NameWithBadge extends StatelessWidget {
           VerifiedBadge(badge),
         ],
       );
+}
+
+
+/// The verified "rosette": a circle with soft scalloped edges and a white
+/// tick, in the style people know from verified accounts.
+class _RosettePainter extends CustomPainter {
+  _RosettePainter(this.color);
+  final Color color;
+
+  @override
+  void paint(Canvas canvas, Size size) {
+    final c = size.center(Offset.zero);
+    final r = size.shortestSide / 2;
+    const bumps = 12;
+    final path = Path();
+    const steps = 144;
+    for (var i = 0; i <= steps; i++) {
+      final t = i / steps * 2 * math.pi;
+      // Radius wobbles gently 12 times around the circle.
+      final rr = r * (0.92 + 0.08 * math.cos(bumps * t));
+      final p = c + Offset(math.cos(t), math.sin(t)) * rr;
+      i == 0 ? path.moveTo(p.dx, p.dy) : path.lineTo(p.dx, p.dy);
+    }
+    path.close();
+    final hsl = HSLColor.fromColor(color);
+    final light = hsl.withLightness((hsl.lightness + 0.08).clamp(0.0, 1.0)).toColor();
+    canvas.drawPath(
+      path,
+      Paint()
+        ..isAntiAlias = true
+        ..shader = LinearGradient(begin: Alignment.topLeft, end: Alignment.bottomRight, colors: [light, color])
+            .createShader(Rect.fromCircle(center: c, radius: r)),
+    );
+    final tick = Path()
+      ..moveTo(c.dx - r * 0.38, c.dy + r * 0.02)
+      ..lineTo(c.dx - r * 0.1, c.dy + r * 0.3)
+      ..lineTo(c.dx + r * 0.4, c.dy - r * 0.28);
+    canvas.drawPath(
+      tick,
+      Paint()
+        ..isAntiAlias = true
+        ..color = Colors.white
+        ..style = PaintingStyle.stroke
+        ..strokeWidth = r * 0.2
+        ..strokeCap = StrokeCap.round
+        ..strokeJoin = StrokeJoin.round,
+    );
+  }
+
+  @override
+  bool shouldRepaint(_RosettePainter old) => old.color != color;
 }

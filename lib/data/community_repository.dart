@@ -24,15 +24,24 @@ abstract class CommunityApi {
   Future<List<Publisher>> publishers();
   /// Office members (president/admin view). Includes ended terms.
   Future<List<Membership>> membersOf(String publisherId);
-  /// Appoint someone to an office for a limited term, found by student number.
+  /// Find people by @username or name (only for people who appoint).
+  Future<List<PersonHit>> searchPeople(String query);
+
+  /// Appoint someone (picked with [searchPeople]) for a term of at most 12 months.
   Future<void> appointMember({
     required String publisherId,
-    required String studentNumber,
+    required String userId,
     required String positionTitle,
     required List<String> scopes,
     required DateTime expiresAt,
   });
-  Future<void> endTerm(String membershipId);
+  /// kind: 'early' (resigned, reshuffle…) or 'removed' (misconduct, super admin
+  /// only, reason 20+ characters). The reason is shown publicly.
+  Future<void> endTerm(String membershipId, {required String kind, required String reason});
+  /// Extend an active term (still at most 12 months from today).
+  Future<void> renewTerm(String membershipId, DateTime newEnd);
+  /// Public record of terms that ended early or by removal, with reasons.
+  Future<List<Membership>> officeHistory();
 
   // ---- news ----
   Future<List<Post>> posts({String? kind, int limit = 20, DateTime? before});
@@ -160,7 +169,7 @@ abstract class CommunityApi {
     String priority = 'normal',
   });
   Future<List<CourseLecturer>> courseLecturers();
-  Future<void> assignLecturer({required String email, required String courseCode});
+  Future<void> assignLecturer({required String userId, required String courseCode});
   Future<void> removeLecturer({required String courseCode, required String lecturerId});
 
   // ---- notifications ----

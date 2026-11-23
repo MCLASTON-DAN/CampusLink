@@ -134,6 +134,15 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<Profile> updateProfile(Profile p) async {
+    try {
+      return await _updateProfile(p);
+    } on PostgrestException catch (e) {
+      // Database rules (username taken/reserved/too soon) come back as readable messages.
+      throw Exception(e.message.replaceFirst(RegExp(r'^.*?: '), ''));
+    }
+  }
+
+  Future<Profile> _updateProfile(Profile p) async {
     // Only the columns a student may edit. Role and the blue tick are protected
     // by the database, and badge/office fields are computed, not stored.
     await _client.from('profiles').update({
@@ -146,6 +155,7 @@ class SupabaseRepository implements CampusRepository {
       'tutor_subjects': p.tutorSubjects,
       'is_buddy_mentor': p.isBuddyMentor,
       'avatar_path': p.avatarPath,
+      if (p.username != null && p.username != _user?.username) 'username': p.username!.trim().toLowerCase().replaceAll('@', ''),
       'status_text': p.statusText,
       'status_until': p.statusUntil?.toUtc().toIso8601String(),
     }).eq('id', p.id);

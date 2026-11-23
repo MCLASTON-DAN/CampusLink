@@ -244,10 +244,53 @@ class LocalCommunity implements CommunityApi {
     return null;
   }
 
+  // Demo people to search for (on a real server this is everyone signed up).
+  List<PersonHit> get _demoPeople => [
+        for (final t in SeedData.tutors)
+          PersonHit(
+            id: t.id,
+            fullName: t.fullName,
+            username: t.fullName.toLowerCase().replaceAll(RegExp(r'[^a-z0-9]+'), '.'),
+            programme: t.programme,
+            year: t.yearOfStudy,
+          ),
+        PersonHit(id: 'local-ruth', fullName: 'Ruth Namuli', username: 'ruth.namuli', programme: 'BBA', year: 2),
+        PersonHit(id: 'local-brian', fullName: 'Brian Okello', username: 'brian.okello', programme: 'BIT', year: 3),
+        PersonHit(id: 'local-grace', fullName: 'Grace Achieng', username: 'grace.a', programme: 'BDSAI', year: 2),
+      ];
+
+  @override
+  Future<List<PersonHit>> searchPeople(String query) async {
+    final q = query.trim().toLowerCase().replaceAll('@', '');
+    if (q.length < 2) return [];
+    return _tick(_demoPeople
+        .where((p) => (p.username ?? '').startsWith(q) || p.fullName.toLowerCase().contains(q))
+        .take(10)
+        .toList());
+  }
+
+  @override
+  Future<void> renewTerm(String membershipId, DateTime newEnd) async {
+    if (newEnd.isAfter(DateTime.now().add(const Duration(days: 366)))) {
+      throw CommunityException('A term can last at most 12 months from today');
+    }
+    final members = _list('members');
+    final i = members.indexWhere((m) => m['id'] == membershipId);
+    if (i < 0) return;
+    if (!_can(members[i]['publisher_id'], 'manage_members')) throw CommunityException('Not allowed');
+    members[i]['expires_at'] = newEnd.toIso8601String();
+    _put('members', members);
+    await _save();
+  }
+
+  @override
+  Future<List<Membership>> officeHistory() =>
+      _tick(_list('members').map(Membership.fromMap).where((m) => m.revokedAt != null).toList().reversed.toList());
+
   @override
   Future<void> appointMember({
     required String publisherId,
-    required String studentNumber,
+    required String userId,
     required String positionTitle,
     required List<String> scopes,
     required DateTime expiresAt,
@@ -257,9 +300,9 @@ class LocalCommunity implements CommunityApi {
       throw CommunityException('A term can last at most 12 months');
     }
     if (positionTitle.trim().length < 3) throw CommunityException('Write the position, e.g. Minister of Welfare');
-    final uid = 'local-student-${studentNumber.trim().toLowerCase()}';
-    if (studentNumber.trim().isEmpty) throw CommunityException('Enter the student number');
-    if (uid == _me.id || studentNumber.trim() == _me.studentNumber) throw CommunityException('You cannot appoint yourself');
+    final uid = userId;
+    if (uid == _me.id) throw CommunityException('You cannot appoint yourself');
+    final person = _demoPeople.where((p) => p.id == uid).firstOrNull;
     final pub = _list('publishers').firstWhere((p) => p['id'] == publisherId);
     final members = _list('members');
     members.add(Membership(
@@ -268,7 +311,8 @@ class LocalCommunity implements CommunityApi {
       publisherName: pub['name'],
       publisherKind: pub['kind'],
       userId: uid,
-      userName: 'Student ${studentNumber.trim()}',
+      userName: person?.fullName ?? 'Student',
+      username: person?.username,
       positionTitle: positionTitle.trim(),
       scopes: scopes,
       startsAt: DateTime.now(),
@@ -279,12 +323,21 @@ class LocalCommunity implements CommunityApi {
   }
 
   @override
-  Future<void> endTerm(String membershipId) async {
+  Future<void> endTerm(String membershipId, {required String kind, required String reason}) async {
     final members = _list('members');
     final i = members.indexWhere((m) => m['id'] == membershipId);
     if (i < 0) return;
     if (!_can(members[i]['publisher_id'], 'manage_members')) throw CommunityException('Not allowed');
+    if (kind == 'removed' && !_me.isSuperAdmin) {
+      throw CommunityException('Only the super admin can remove someone for misconduct.');
+    }
+    if (kind == 'removed' && reason.trim().length < 20) {
+      throw CommunityException('Explain why they were removed (at least 20 characters). It will be shown publicly.');
+    }
+    if (reason.trim().length < 3) throw CommunityException('Give a short reason for ending the term early.');
     members[i]['revoked_at'] = DateTime.now().toIso8601String();
+    members[i]['end_kind'] = kind;
+    members[i]['end_reason'] = reason.trim();
     _put('members', members);
     await _save();
   }
@@ -1138,12 +1191,12 @@ class LocalCommunity implements CommunityApi {
       .toList());
 
   @override
-  Future<void> assignLecturer({required String email, required String courseCode}) async {
+  Future<void> assignLecturer({required String userId, required String courseCode}) async {
     if (!_me.isStaff) throw CommunityException('Only staff can assign lecturers.');
-    // Demo mode has one person on the device, so the unit is assigned to you.
     final code = courseCode.toUpperCase().replaceAll(RegExp(r'\s+'), '');
-    final l = _list('lecturers')..removeWhere((x) => x['course_code'] == code && x['lecturer_id'] == _me.id);
-    l.add({'course_code': code, 'lecturer_id': _me.id, 'name': _me.fullName});
+    final name = userId == _me.id ? _me.fullName : (_demoPeople.where((p) => p.id == userId).firstOrNull?.fullName ?? '');
+    final l = _list('lecturers')..removeWhere((x) => x['course_code'] == code && x['lecturer_id'] == userId);
+    l.add({'course_code': code, 'lecturer_id': userId, 'name': name});
     _put('lecturers', l);
     await _save();
   }

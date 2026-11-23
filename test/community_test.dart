@@ -38,7 +38,7 @@ void main() {
     final m = (await r.community.myMemberships()).first;
     await fails(r.community.appointMember(
         publisherId: m.publisherId,
-        studentNumber: '123',
+        userId: 'local-ruth',
         positionTitle: 'Minister',
         scopes: ['news'],
         expiresAt: DateTime.now().add(const Duration(days: 90))));
@@ -49,10 +49,32 @@ void main() {
     final m = (await r.community.myMemberships()).first;
     await fails(r.community.appointMember(
         publisherId: m.publisherId,
-        studentNumber: '123',
+        userId: 'local-ruth',
         positionTitle: 'Minister',
         scopes: ['news'],
         expiresAt: DateTime.now().add(const Duration(days: 500))));
+  });
+
+  test('find by username, appoint, and only the super admin removes for misconduct', () async {
+    final r = await repoAs('president@x.ug');
+    final m = (await r.community.myMemberships()).first;
+    final hits = await r.community.searchPeople('@ruth');
+    expect(hits.single.username, 'ruth.namuli');
+    await r.community.appointMember(
+        publisherId: m.publisherId,
+        userId: hits.single.id,
+        positionTitle: 'Minister of Welfare',
+        scopes: ['news'],
+        expiresAt: DateTime.now().add(const Duration(days: 90)));
+    final member = (await r.community.membersOf(m.publisherId)).firstWhere((x) => x.userId == hits.single.id);
+    expect(member.state, 'active');
+    // The guild president cannot remove for misconduct...
+    await fails(r.community.endTerm(member.id, kind: 'removed', reason: 'Broke the code of conduct twice'));
+    // ...but can end a term early, with a short reason.
+    await r.community.endTerm(member.id, kind: 'early', reason: 'Resigned');
+    final history = await r.community.officeHistory();
+    expect(history.first.endReason, 'Resigned');
+    expect(history.first.state, 'early');
   });
 
   test('only the super admin can approve major events', () async {

@@ -47,7 +47,7 @@ class SupabaseCommunity implements CommunityApi {
     if (list.isEmpty) return {};
     final rows = await _client
         .from('public_profiles')
-        .select('id, full_name, office_title, office_name, badge')
+        .select('id, full_name, username, office_title, office_name, badge')
         .inFilter('id', list);
     return {for (final r in rows) r['id'] as String: Map<String, dynamic>.from(r)};
   }
@@ -152,28 +152,31 @@ class SupabaseCommunity implements CommunityApi {
                   'publisher_name': pubs[r['publisher_id']]?.name ?? '',
                   'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'guild',
                   'user_name': people[r['user_id']]?['full_name'],
+                  'username': people[r['user_id']]?['username'],
                 }))
             .toList();
       });
 
   @override
+  Future<List<PersonHit>> searchPeople(String query) => _guard(() async {
+        if (query.trim().replaceAll('@', '').length < 2) return <PersonHit>[];
+        final rows = await _client.rpc('search_people', params: {'p_query': query}) as List;
+        return rows.map((r) => PersonHit.fromMap(Map<String, dynamic>.from(r))).toList();
+      });
+
+  @override
   Future<void> appointMember({
     required String publisherId,
-    required String studentNumber,
+    required String userId,
     required String positionTitle,
     required List<String> scopes,
     required DateTime expiresAt,
   }) =>
       _guard(() async {
-        final person = await _client
-            .from('profiles')
-            .select('id')
-            .eq('student_number', studentNumber.trim())
-            .maybeSingle();
-        if (person == null) throw CommunityException('No student found with that number. They must sign up first.');
+        if (userId == _uid) throw CommunityException('You cannot appoint yourself.');
         await _client.from('publisher_members').insert({
           'publisher_id': publisherId,
-          'user_id': person['id'],
+          'user_id': userId,
           'position_title': positionTitle.trim(),
           'scopes': scopes,
           'expires_at': expiresAt.toUtc().toIso8601String(),
@@ -182,9 +185,39 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> endTerm(String membershipId) => _guard(() => _client
+  Future<void> endTerm(String membershipId, {required String kind, required String reason}) => _guard(() => _client
       .from('publisher_members')
-      .update({'revoked_at': DateTime.now().toUtc().toIso8601String()}).eq('id', membershipId));
+      .update({
+        'revoked_at': DateTime.now().toUtc().toIso8601String(),
+        'end_kind': kind,
+        'end_reason': reason.trim(),
+      }).eq('id', membershipId));
+
+  @override
+  Future<void> renewTerm(String membershipId, DateTime newEnd) => _guard(() => _client
+      .from('publisher_members')
+      .update({'expires_at': newEnd.toUtc().toIso8601String()}).eq('id', membershipId));
+
+  @override
+  Future<List<Membership>> officeHistory() => _guard(() async {
+        final pubs = await _pubs();
+        final rows = await _client
+            .from('publisher_members')
+            .select()
+            .not('revoked_at', 'is', null)
+            .order('revoked_at', ascending: false)
+            .limit(100);
+        final people = await _people(rows.map((r) => r['user_id'] as String));
+        return rows
+            .map((r) => Membership.fromMap({
+                  ...r,
+                  'publisher_name': pubs[r['publisher_id']]?.name ?? '',
+                  'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'guild',
+                  'user_name': people[r['user_id']]?['full_name'],
+                  'username': people[r['user_id']]?['username'],
+                }))
+            .toList();
+      });
 
   // ---------------------------------------------------------------- news
   @override
@@ -852,8 +885,10 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> assignLecturer({required String email, required String courseCode}) => _guard(() =>
-      _client.rpc('assign_lecturer', params: {'p_email': email.trim(), 'p_course': courseCode.trim()}));
+  Future<void> assignLecturer({required String userId, required String courseCode}) => _guard(() => _client
+      .from('course_lecturers')
+      .upsert({'course_code': courseCode.toUpperCase().replaceAll(RegExp(r'\s+'), ''), 'lecturer_id': userId},
+          ignoreDuplicates: true));
 
   @override
   Future<void> removeLecturer({required String courseCode, required String lecturerId}) => _guard(() => _client

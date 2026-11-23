@@ -8,6 +8,7 @@ import '../../data/community_models.dart';
 import '../../data/community_repository.dart';
 import '../../data/providers.dart';
 import '../../widgets/badge.dart';
+import '../../widgets/person_picker.dart';
 import '../../widgets/common.dart';
 
 Future<void> _run(BuildContext context, Future<void> Function() f, {String? ok}) async {
@@ -649,19 +650,52 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
 }
 
 // ------------------------------------------------------------ moderation
+final _officeHistoryProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).officeHistory());
+
+/// Public accountability: content removed, and office terms that ended early
+/// or by removal, each with the reason.
 class ModerationLogScreen extends ConsumerWidget {
   const ModerationLogScreen({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) => Scaffold(
-        appBar: AppBar(title: const Text('Removal log')),
-        body: AsyncBody(
-          value: ref.watch(moderationLogProvider),
-          builder: (list) => list.isEmpty
-              ? const EmptyState(icon: Icons.verified_outlined, title: 'Nothing has been removed', subtitle: 'Every removal shows here, with who did it and why. It cannot be erased.')
-              : ListView(padding: const EdgeInsets.all(12), children: [
-                  for (final m in list)
-                    Card(child: ListTile(title: Text('${m.action == 'remove' ? 'Removed' : 'Restored'} ${m.targetType}: ${m.targetTitle}'), subtitle: Text('By ${m.actorName} · ${friendlyDate(m.createdAt)}\nReason: ${m.reason}'), isThreeLine: true)),
-                ]),
+  Widget build(BuildContext context, WidgetRef ref) => DefaultTabController(
+        length: 2,
+        child: Scaffold(
+          appBar: AppBar(
+            title: const Text('Public record'),
+            bottom: const TabBar(tabs: [Tab(text: 'Removed content'), Tab(text: 'Office changes')]),
+          ),
+          body: TabBarView(children: [
+            AsyncBody(
+              value: ref.watch(moderationLogProvider),
+              builder: (list) => list.isEmpty
+                  ? const EmptyState(icon: Icons.verified_outlined, title: 'Nothing has been removed', subtitle: 'Every removal shows here, with who did it and why. It cannot be erased.')
+                  : ListView(padding: const EdgeInsets.all(12), children: [
+                      for (final m in list)
+                        Card(child: ListTile(title: Text('${m.action == 'remove' ? 'Removed' : 'Restored'} ${m.targetType}: ${m.targetTitle}'), subtitle: Text('By ${m.actorName} · ${friendlyDate(m.createdAt)}\nReason: ${m.reason}'), isThreeLine: true)),
+                    ]),
+            ),
+            AsyncBody(
+              value: ref.watch(_officeHistoryProvider),
+              builder: (list) => list.isEmpty
+                  ? const EmptyState(icon: Icons.badge_outlined, title: 'No early endings', subtitle: 'When someone leaves office early or is removed, it shows here with the reason.')
+                  : ListView(padding: const EdgeInsets.all(12), children: [
+                      for (final m in list)
+                        Card(
+                          child: ListTile(
+                            leading: Icon(m.endKind == 'removed' ? Icons.gpp_bad_rounded : Icons.logout_rounded,
+                                color: m.endKind == 'removed' ? const Color(0xFFE0245E) : null),
+                            title: Text('${m.userName ?? 'Member'} · ${m.positionTitle}'),
+                            subtitle: Text([
+                              '${m.endKind == 'removed' ? 'Removed from office' : 'Ended term early'} · ${m.publisherName}',
+                              if (m.revokedAt != null) DateFormat('d MMM y').format(m.revokedAt!.toLocal()),
+                              if (m.endReason != null) 'Reason: ${m.endReason}',
+                            ].join('\n')),
+                            isThreeLine: true,
+                          ),
+                        ),
+                    ]),
+            ),
+          ]),
         ),
       );
 }
@@ -739,22 +773,18 @@ class _MembersState extends ConsumerState<MembersScreen> {
           future: _f,
           builder: (_, s) {
             if (!s.hasData) return const Padding(padding: EdgeInsets.all(30), child: Center(child: CircularProgressIndicator()));
-            return Column(children: [
-              for (final m in s.data!)
-                Card(
-                  child: ListTile(
-                    title: Text('${m.userName ?? 'Student'} · ${m.positionTitle}'),
-                    subtitle: Text(m.isActive ? '${m.daysLeft} days left (ends ${DateFormat('d MMM y').format(m.expiresAt)})' : 'Term ended'),
-                    trailing: m.isActive
-                        ? TextButton(
-                            onPressed: () async {
-                              await _run(context, () => api.endTerm(m.id), ok: 'Term ended');
-                              reload();
-                            },
-                            child: const Text('End term'))
-                        : null,
-                  ),
-                ),
+            final list = s.data!;
+            final active = list.where((m) => m.state == 'active').toList();
+            final past = list.where((m) => m.state != 'active').toList();
+            return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+              if (active.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('Nobody in office yet. Tap Appoint.')),
+              for (final m in active) _MemberCard(m: m, superAdmin: me?.isSuperAdmin ?? false, api: api, onChanged: reload),
+              if (past.isNotEmpty) ...[
+                const SizedBox(height: 16),
+                Text('Past members', style: Theme.of(context).textTheme.titleSmall),
+                const SizedBox(height: 6),
+                for (final m in past) _MemberCard(m: m, superAdmin: me?.isSuperAdmin ?? false, api: api, onChanged: reload),
+              ],
             ]);
           },
         ),
@@ -763,17 +793,24 @@ class _MembersState extends ConsumerState<MembersScreen> {
   }
 
   Future<bool> _appoint(BuildContext context, CommunityApi api, String pubId) async {
-    final num = TextEditingController(), title = TextEditingController();
+    final person = await pickPerson(context, api, title: 'Who are you appointing?');
+    if (person == null || !context.mounted) return false;
+    final title = TextEditingController();
     final scopes = <String>{'news', 'events'};
     int months = 12;
     final ok = await showDialog<bool>(
       context: context,
       builder: (ctx) => StatefulBuilder(
         builder: (ctx, set) => AlertDialog(
-          title: const Text('Appoint a member'),
+          title: Text('Appoint ${person.fullName}'),
           content: SingleChildScrollView(
             child: Column(mainAxisSize: MainAxisSize.min, children: [
-              TextField(controller: num, decoration: const InputDecoration(labelText: 'Student number')),
+              ListTile(
+                contentPadding: EdgeInsets.zero,
+                leading: PersonAvatar(name: person.fullName, url: person.avatar),
+                title: NameWithBadge(person.fullName, person.badge),
+                subtitle: Text(person.username == null ? '' : '@${person.username}'),
+              ),
               TextField(controller: title, decoration: const InputDecoration(labelText: 'Position, e.g. Minister of ICT')),
               DropdownButtonFormField<int>(
                 isExpanded: true,
@@ -791,10 +828,6 @@ class _MembersState extends ConsumerState<MembersScreen> {
       ),
     );
     if (ok != true || !context.mounted) return false;
-    if (num.text.trim().isEmpty) {
-      showSnack(context, 'Enter their student number.');
-      return false;
-    }
     if (title.text.trim().length < 3 || title.text.trim().length > 80) {
       showSnack(context, 'Position must be 3–80 letters.');
       return false;
@@ -805,7 +838,7 @@ class _MembersState extends ConsumerState<MembersScreen> {
     }
     var done = false;
     await _run(context, () async {
-      await api.appointMember(publisherId: pubId, studentNumber: num.text, positionTitle: title.text, scopes: scopes.toList(), expiresAt: DateTime.now().add(Duration(days: months * 30)));
+      await api.appointMember(publisherId: pubId, userId: person.id, positionTitle: title.text, scopes: scopes.toList(), expiresAt: DateTime.now().add(Duration(days: months * 30)));
       done = true;
     }, ok: 'Appointed');
     return done;
@@ -813,6 +846,182 @@ class _MembersState extends ConsumerState<MembersScreen> {
 }
 
 final _publishersProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).publishers());
+
+/// One office member: status, and the actions allowed for them.
+class _MemberCard extends StatelessWidget {
+  const _MemberCard({required this.m, required this.superAdmin, required this.api, required this.onChanged});
+  final Membership m;
+  final bool superAdmin;
+  final CommunityApi api;
+  final VoidCallback onChanged;
+
+  static const _earlyReasons = ['Resigned', 'Reshuffle', 'Graduated / left the university', 'Health or personal reasons'];
+
+  Future<void> _renew(BuildContext context) async {
+    int months = 6;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: Text('Renew ${m.userName ?? 'term'}'),
+          content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('Now ends ${DateFormat('d MMM y').format(m.expiresAt)}. A term can reach at most 12 months from today.'),
+            const SizedBox(height: 12),
+            Wrap(spacing: 8, children: [
+              for (final x in [3, 6, 12]) ChoiceChip(label: Text('$x months from today'), selected: months == x, onSelected: (_) => set(() => months = x)),
+            ]),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Renew')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    await _run(context, () => api.renewTerm(m.id, DateTime.now().add(Duration(days: months * 30))), ok: 'Term renewed');
+    onChanged();
+  }
+
+  Future<void> _endEarly(BuildContext context) async {
+    var pick = _earlyReasons.first;
+    final other = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, set) => AlertDialog(
+          title: const Text('End term early'),
+          content: SingleChildScrollView(
+            child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+              Text('${m.userName} stops being ${m.positionTitle} now. Their badge goes away. Their old posts stay.'),
+              const SizedBox(height: 8),
+              for (final r in [..._earlyReasons, 'Other'])
+                RadioListTile<String>(value: r, groupValue: pick, onChanged: (v) => set(() => pick = v!), title: Text(r), dense: true, contentPadding: EdgeInsets.zero),
+              if (pick == 'Other') TextField(controller: other, decoration: const InputDecoration(labelText: 'Reason')),
+              const SizedBox(height: 6),
+              const Text('The reason is shown publicly in the record.', style: TextStyle(fontSize: 12)),
+            ]),
+          ),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('End term')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    final reason = pick == 'Other' ? other.text : pick;
+    await _run(context, () => api.endTerm(m.id, kind: 'early', reason: reason), ok: 'Term ended');
+    onChanged();
+  }
+
+  Future<void> _remove(BuildContext context) async {
+    final why = TextEditingController();
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        icon: const Icon(Icons.gpp_bad_rounded, color: Colors.red),
+        title: const Text('Remove for misconduct'),
+        content: SingleChildScrollView(
+          child: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
+            Text('${m.userName} will be removed as ${m.positionTitle} immediately.'),
+            const SizedBox(height: 8),
+            const Text('Everyone will see "Removed from office" and the reason you write. Keep it factual and respectful: '
+                'what rule was broken and what was decided. Do not include private or medical details.'),
+            const SizedBox(height: 12),
+            TextField(
+              controller: why,
+              minLines: 3,
+              maxLines: 6,
+              maxLength: 500,
+              decoration: const InputDecoration(labelText: 'Public reason (20+ characters)', alignLabelWithHint: true),
+            ),
+          ]),
+        ),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Continue'),
+          ),
+        ],
+      ),
+    );
+    if (ok != true || !context.mounted) return;
+    if (why.text.trim().length < 20) {
+      showSnack(context, 'Please write a reason of at least 20 characters.');
+      return;
+    }
+    final sure = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Are you sure?'),
+        content: Text('This cannot be undone. To give ${m.userName} the role again later, appoint them again.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(
+            style: FilledButton.styleFrom(backgroundColor: Colors.red),
+            onPressed: () => Navigator.pop(ctx, true),
+            child: const Text('Yes, remove'),
+          ),
+        ],
+      ),
+    );
+    if (sure != true || !context.mounted) return;
+    await _run(context, () => api.endTerm(m.id, kind: 'removed', reason: why.text), ok: 'Removed from office');
+    onChanged();
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final t = Theme.of(context).textTheme;
+    final (label, color) = switch (m.state) {
+      'active' => (m.daysLeft <= 14 ? 'Ends in ${m.daysLeft} days' : 'In office · ${m.daysLeft} days left', m.daysLeft <= 14 ? const Color(0xFFF59E0B) : const Color(0xFF14A44D)),
+      'ended' => ('Term ended ${DateFormat('d MMM y').format(m.expiresAt)}', const Color(0xFF64748B)),
+      'removed' => ('Removed from office', const Color(0xFFE0245E)),
+      _ => ('Ended early', const Color(0xFF64748B)),
+    };
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(14),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+          Row(children: [
+            PersonAvatar(name: m.userName ?? '?'),
+            const SizedBox(width: 12),
+            Expanded(
+              child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                NameWithBadge(m.userName ?? 'Member', m.state == 'active' ? m.badge : null, style: t.titleSmall?.copyWith(fontWeight: FontWeight.w700)),
+                Text([m.positionTitle, if (m.username != null) '@${m.username}'].join(' · '), style: t.bodySmall),
+              ]),
+            ),
+          ]),
+          const SizedBox(height: 8),
+          Container(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
+            decoration: BoxDecoration(color: color.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
+            child: Text(label, style: TextStyle(color: color, fontWeight: FontWeight.w700, fontSize: 12)),
+          ),
+          if (m.endReason != null) ...[
+            const SizedBox(height: 6),
+            Text('Reason: ${m.endReason}', style: t.bodySmall),
+          ],
+          if (m.state == 'active')
+            Wrap(alignment: WrapAlignment.end, spacing: 4, children: [
+              TextButton(onPressed: () => _renew(context), child: const Text('Renew')),
+              TextButton(onPressed: () => _endEarly(context), child: const Text('End early')),
+              if (superAdmin)
+                TextButton(
+                  style: TextButton.styleFrom(foregroundColor: Colors.red),
+                  onPressed: () => _remove(context),
+                  child: const Text('Remove for misconduct'),
+                ),
+            ]),
+        ]),
+      ),
+    );
+  }
+}
 
 
 class _LevelChip extends StatelessWidget {
