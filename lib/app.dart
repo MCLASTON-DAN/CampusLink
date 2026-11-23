@@ -1,4 +1,5 @@
 import 'package:flutter/material.dart';
+import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
@@ -156,6 +157,18 @@ class CampusLinkApp extends ConsumerWidget {
       darkTheme: buildTheme(Brightness.dark),
       themeMode: ThemeMode.system,
       routerConfig: router,
+      // Status bar (clock, battery) blends with the app: same colour as the
+      // page, with icons that stay readable in light and dark mode.
+      builder: (context, child) {
+        final dark = Theme.of(context).brightness == Brightness.dark;
+        return AnnotatedRegion<SystemUiOverlayStyle>(
+          value: (dark ? SystemUiOverlayStyle.light : SystemUiOverlayStyle.dark).copyWith(
+            statusBarColor: Colors.transparent,
+            systemNavigationBarColor: Theme.of(context).colorScheme.surface,
+          ),
+          child: child ?? const SizedBox.shrink(),
+        );
+      },
     );
   }
 }
