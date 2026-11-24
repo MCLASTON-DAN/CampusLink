@@ -1233,4 +1233,26 @@ class LocalCommunity implements CommunityApi {
     _put('notifications', l);
     await _save();
   }
+
+  @override
+  Future<List<PostInsight>> postInsights({int days = 90}) async {
+    final out = <PostInsight>[];
+    for (final p in _list('posts')) {
+      final n = await viewCount(p['id']);
+      if (n == null) continue;
+      out.add(PostInsight(
+        postId: p['id'],
+        title: p['title'] ?? '',
+        publisherName: p['publisher_name'] ?? '',
+        publishedAt: DateTime.tryParse('${p['published_at']}') ?? DateTime.now(),
+        views: n,
+        views24h: n,
+        views7d: n,
+        comments: _list('comments').where((c) => c['target_id'] == p['id']).length,
+        likes: _list('reactions').where((r) => r['target_id'] == p['id']).length,
+      ));
+    }
+    out.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
+    return _tick(out);
+  }
 }

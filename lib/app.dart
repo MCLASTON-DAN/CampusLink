@@ -11,6 +11,7 @@ import 'features/auth/login_screen.dart';
 import 'features/buddy/buddy_screen.dart';
 import 'features/community/policy_gate.dart';
 import 'features/courses/courses_screen.dart';
+import 'features/community/insights_screen.dart';
 import 'features/notifications/notifications.dart';
 import 'features/community/events_screens.dart';
 import 'features/community/map_screen.dart';
@@ -90,6 +91,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/install', builder: (_, __) => const InstallScreen()),
           GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
           GoRoute(path: '/tutor-reports', builder: (_, __) => const TutorReportsScreen()),
+          GoRoute(path: '/insights', builder: (_, __) => const PostInsightsScreen()),
           GoRoute(
             path: '/courses',
             builder: (_, __) => const CoursesScreen(),

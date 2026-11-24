@@ -803,6 +803,38 @@ class CourseNotice {
       };
 }
 
+/// How a post is doing. Only the posting office and admins can see this.
+class PostInsight {
+  PostInsight({
+    required this.postId,
+    required this.title,
+    required this.publisherName,
+    required this.publishedAt,
+    required this.views,
+    required this.views24h,
+    required this.views7d,
+    required this.comments,
+    required this.likes,
+  });
+  final String postId, title, publisherName;
+  final DateTime publishedAt;
+  final int views, views24h, views7d, comments, likes;
+  factory PostInsight.fromMap(Map<String, dynamic> m) {
+    int n(String k) => ((m[k] ?? 0) as num).toInt();
+    return PostInsight(
+      postId: m['post_id'],
+      title: m['title'] ?? '',
+      publisherName: m['publisher_name'] ?? '',
+      publishedAt: DateTime.parse(m['published_at'].toString()),
+      views: n('views'),
+      views24h: n('views_24h'),
+      views7d: n('views_7d'),
+      comments: n('comments'),
+      likes: n('likes'),
+    );
+  }
+}
+
 /// A person found by username or name, for appointing.
 class PersonHit {
   PersonHit({

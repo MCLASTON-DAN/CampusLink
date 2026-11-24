@@ -144,6 +144,9 @@ abstract class CommunityApi {
   /// null when this person is not allowed to see the number.
   Future<int?> viewCount(String postId);
 
+  /// View details for the posts I (or my office) published; all posts for admins.
+  Future<List<PostInsight>> postInsights({int days = 90});
+
   // ---- profile photo ----
   /// Uploads a small square photo and returns its public link.
   Future<String> uploadAvatar(Uint8List bytes);

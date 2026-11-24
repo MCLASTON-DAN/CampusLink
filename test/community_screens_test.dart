@@ -13,6 +13,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:campuslink/features/courses/courses_screen.dart';
+import 'package:campuslink/features/community/insights_screen.dart';
 import 'package:campuslink/features/notifications/notifications.dart';
 import 'package:campuslink/features/community/policy_gate.dart';
 import 'package:campuslink/features/legal/policies.dart';
@@ -44,6 +45,7 @@ void main() {
     'me': () => const ProfileScreen(),
     'install': () => const InstallScreen(),
     'notifications': () => const NotificationsScreen(),
+    'insights': () => const PostInsightsScreen(),
     'courses': () => const CoursesScreen(),
     'course notice': () => const ComposeCourseNoticeScreen(),
     'lecturers': () => const LecturersScreen(),

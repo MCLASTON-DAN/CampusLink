@@ -24,7 +24,7 @@ const _dests = [
   _Dest('/study', 'Study', Icons.school_outlined, Icons.school_rounded,
       ['/study', '/tutors', '/groups', '/timetable', '/buddy', '/pulse', '/courses']),
   _Dest('/profile', 'Me', Icons.person_outline_rounded, Icons.person_rounded,
-      ['/profile', '/community', '/members', '/reports', '/moderation', '/install', '/notifications', '/tutor-reports']),
+      ['/profile', '/community', '/members', '/reports', '/moderation', '/install', '/notifications', '/tutor-reports', '/insights']),
 ];
 
 /// Responsive scaffold: bottom bar on phones, nav rail on tablets/desktop/web.

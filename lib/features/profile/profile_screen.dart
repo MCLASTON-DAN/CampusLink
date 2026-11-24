@@ -98,6 +98,7 @@ class ProfileScreen extends ConsumerWidget {
           if (isOfficeHolder || user.isStaff) ...[
             const SectionTitle('Office tools'),
             TileGrid(children: [
+              ActionTile(icon: Icons.insights_rounded, title: 'View details', subtitle: 'How many people opened each post', color: const Color(0xFF0EA5E9), onTap: () => context.push('/insights')),
               if (canManage || user.isSuperAdmin)
                 ActionTile(icon: Icons.badge_rounded, title: 'Office members', subtitle: 'Appoint people, terms up to 12 months', color: const Color(0xFF2E9E5B), onTap: () => context.push('/members')),
               if (user.isStaff)

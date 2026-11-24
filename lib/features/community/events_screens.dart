@@ -178,7 +178,7 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
               ? const EmptyState(icon: Icons.search_off_rounded, title: 'Event not found')
               : PageBody(maxWidth: 760, children: [
                   if ((e.coverPath ?? '').isNotEmpty) ...[
-                    MediaBanner(coverUrl: e.coverPath, radius: 16),
+                    MediaBanner(coverUrl: e.coverPath, radius: 16, full: true),
                     const SizedBox(height: 16),
                   ],
                   Text(e.title, style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),

@@ -937,4 +937,10 @@ class SupabaseCommunity implements CommunityApi {
       .update({'read_at': DateTime.now().toUtc().toIso8601String()})
       .eq('user_id', _uid)
       .isFilter('read_at', null));
+
+  @override
+  Future<List<PostInsight>> postInsights({int days = 90}) => _guard(() async {
+        final rows = await _client.rpc('post_insights', params: {'p_days': days}) as List;
+        return rows.map((r) => PostInsight.fromMap(Map<String, dynamic>.from(r))).toList();
+      });
 }

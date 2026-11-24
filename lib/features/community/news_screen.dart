@@ -266,22 +266,22 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
               ? const EmptyState(icon: Icons.search_off_rounded, title: 'Post not found')
               : PageBody(maxWidth: 760, children: [
                   if (MediaBanner.has(coverUrl: p.coverPath, videoUrl: p.videoUrl)) ...[
-                    MediaBanner(coverUrl: p.coverPath, videoUrl: p.videoUrl, radius: 16),
+                    MediaBanner(coverUrl: p.coverPath, videoUrl: p.videoUrl, radius: 16, full: true),
                     const SizedBox(height: 16),
                   ],
                   NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: Theme.of(context).textTheme.titleSmall),
                   Text('${p.kindLabel} · ${friendlyDate(p.publishedAt)}${p.isEdited ? ' · edited' : ''}',
                       style: Theme.of(context).textTheme.bodySmall),
                   if (_views != null)
-                    Tooltip(
-                      message: 'Only your office and administrators can see this number.',
+                    InkWell(
+                      onTap: () => context.push('/insights'),
                       child: Padding(
                         padding: const EdgeInsets.only(top: 4),
                         child: Row(children: [
                           const Icon(Icons.visibility_outlined, size: 16),
                           const SizedBox(width: 4),
-                          Text('$_views ${_views == 1 ? 'person has' : 'people have'} opened this · visible to your office only',
-                              style: Theme.of(context).textTheme.bodySmall),
+                          Text('$_views ${_views == 1 ? 'person has' : 'people have'} opened this · view details',
+                              style: Theme.of(context).textTheme.bodySmall?.copyWith(color: Theme.of(context).colorScheme.primary)),
                         ]),
                       ),
                     ),
