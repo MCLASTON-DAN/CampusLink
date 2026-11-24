@@ -743,7 +743,28 @@ class _MembersState extends ConsumerState<MembersScreen> {
     final mems = (ref.watch(myMembershipsProvider).valueOrNull ?? []).where((m) => m.isActive && m.can('manage_members')).toList();
     final pubs = ref.watch(_publishersProvider).valueOrNull ?? [];
     final allowed = (me?.isSuperAdmin ?? false) ? pubs : pubs.where((p) => mems.any((m) => m.publisherId == p.id)).toList();
-    if (allowed.isEmpty) return Scaffold(appBar: AppBar(title: const Text('Office members')), body: const EmptyState(icon: Icons.lock_outline, title: 'Not allowed'));
+    final pubsState = ref.watch(_publishersProvider);
+    final memsState = ref.watch(myMembershipsProvider);
+    if (pubsState.isLoading || memsState.isLoading || me == null) {
+      return Scaffold(appBar: AppBar(title: const Text('Office members')), body: const Center(child: CircularProgressIndicator()));
+    }
+    if (pubsState.hasError) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Office members')),
+        body: EmptyState(
+          icon: Icons.wifi_off_rounded,
+          title: 'Could not load offices',
+          subtitle: 'Check your internet and try again.',
+          action: FilledButton(onPressed: () => ref.invalidate(_publishersProvider), child: const Text('Try again')),
+        ),
+      );
+    }
+    if (allowed.isEmpty) {
+      return Scaffold(
+        appBar: AppBar(title: const Text('Office members')),
+        body: const EmptyState(icon: Icons.lock_outline, title: 'Not allowed', subtitle: 'Only office managers and the super admin can appoint members.'),
+      );
+    }
     _pub ??= allowed.first.id;
     _f ??= api.membersOf(_pub!);
     void reload() => setState(() => _f = api.membersOf(_pub!));
@@ -778,12 +799,12 @@ class _MembersState extends ConsumerState<MembersScreen> {
             final past = list.where((m) => m.state != 'active').toList();
             return Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
               if (active.isEmpty) const Padding(padding: EdgeInsets.all(16), child: Text('Nobody in office yet. Tap Appoint.')),
-              for (final m in active) _MemberCard(m: m, superAdmin: me?.isSuperAdmin ?? false, api: api, onChanged: reload),
+              for (final m in active) _MemberCard(m: m, superAdmin: me.isSuperAdmin, api: api, onChanged: reload),
               if (past.isNotEmpty) ...[
                 const SizedBox(height: 16),
                 Text('Past members', style: Theme.of(context).textTheme.titleSmall),
                 const SizedBox(height: 6),
-                for (final m in past) _MemberCard(m: m, superAdmin: me?.isSuperAdmin ?? false, api: api, onChanged: reload),
+                for (final m in past) _MemberCard(m: m, superAdmin: me.isSuperAdmin, api: api, onChanged: reload),
               ],
             ]);
           },
