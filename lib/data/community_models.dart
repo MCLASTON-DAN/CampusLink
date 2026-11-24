@@ -9,7 +9,8 @@ DateTime? _dtn(dynamic v) => v == null ? null : _dt(v);
 List<String> _strs(dynamic v) =>
     v == null ? const [] : List<String>.from((v as List).map((e) => e.toString()));
 
-/// Badge colour that goes with an office: red = administration, green = guild.
+/// Badge colour that goes with an office: red = administration, green = guild,
+/// purple = newsroom. Anything unknown gets no badge (never a wrong one).
 String? badgeForKind(String? kind) => switch (kind) {
       'administration' => 'red',
       'guild' => 'green',

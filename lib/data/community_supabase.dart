@@ -36,8 +36,19 @@ class SupabaseCommunity implements CommunityApi {
     }
   }
 
-  Future<Map<String, Publisher>> _pubs() async {
-    _publishers ??= (await _client.from('publishers').select()).map(Publisher.fromMap).toList();
+  String? _pubsFor; // which signed-in person the office list was loaded for
+
+  /// Offices by id. Reloaded when the person changes, and whenever a post
+  /// names an office we have not seen (e.g. one created after the app opened).
+  Future<Map<String, Publisher>> _pubs([Iterable<String> need = const []]) async {
+    final stale = _publishers == null ||
+        _publishers!.isEmpty ||
+        _pubsFor != _uid ||
+        need.any((id) => !_publishers!.any((p) => p.id == id));
+    if (stale) {
+      _publishers = (await _client.from('publishers').select()).map(Publisher.fromMap).toList();
+      _pubsFor = _uid;
+    }
     return {for (final p in _publishers!) p.id: p};
   }
 
@@ -78,7 +89,7 @@ class SupabaseCommunity implements CommunityApi {
   }
 
   Future<List<Post>> _postsFrom(List<Map<String, dynamic>> rows) async {
-    final pubs = await _pubs();
+    final pubs = await _pubs(rows.map((r) => r['publisher_id'] as String));
     final people = await _people(rows.map((r) => r['author_id'] as String));
     final stats = await _stats(rows.map((r) => r['id'] as String));
     final liked = await _myLikes('post', rows.map((r) => r['id'] as String));
@@ -88,7 +99,7 @@ class SupabaseCommunity implements CommunityApi {
       return Post.fromMap({
         ...r,
         'publisher_name': pub?.name ?? '',
-        'publisher_kind': pub?.kind ?? 'guild',
+        'publisher_kind': pub?.kind ?? 'unknown',
         'author_name': people[r['author_id']]?['full_name'] ?? '',
         'likes': stats[id]?['likes'] ?? 0,
         'comments': stats[id]?['comments'] ?? 0,
@@ -98,7 +109,7 @@ class SupabaseCommunity implements CommunityApi {
   }
 
   Future<List<CampusEvent>> _eventsFrom(List<Map<String, dynamic>> rows) async {
-    final pubs = await _pubs();
+    final pubs = await _pubs(rows.map((r) => r['publisher_id']).whereType<String>());
     final stats = await _stats(rows.map((r) => r['id'] as String));
     final liked = await _myLikes('event', rows.map((r) => r['id'] as String));
     return rows.map((r) {
@@ -111,7 +122,7 @@ class SupabaseCommunity implements CommunityApi {
       return CampusEvent.fromMap({
         ...r,
         'publisher_name': pub?.name ?? (r['organiser'] ?? ''),
-        'publisher_kind': pub?.kind ?? 'guild',
+        'publisher_kind': pub?.kind ?? 'unknown',
         'speakers': speakers,
         'likes': stats[id]?['likes'] ?? 0,
         'comments': stats[id]?['comments'] ?? 0,
@@ -129,7 +140,7 @@ class SupabaseCommunity implements CommunityApi {
             .map((r) => Membership.fromMap({
                   ...r,
                   'publisher_name': pubs[r['publisher_id']]?.name ?? '',
-                  'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'guild',
+                  'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'unknown',
                 }))
             .toList();
       });
@@ -150,7 +161,7 @@ class SupabaseCommunity implements CommunityApi {
             .map((r) => Membership.fromMap({
                   ...r,
                   'publisher_name': pubs[r['publisher_id']]?.name ?? '',
-                  'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'guild',
+                  'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'unknown',
                   'user_name': people[r['user_id']]?['full_name'],
                   'username': people[r['user_id']]?['username'],
                 }))
@@ -212,7 +223,7 @@ class SupabaseCommunity implements CommunityApi {
             .map((r) => Membership.fromMap({
                   ...r,
                   'publisher_name': pubs[r['publisher_id']]?.name ?? '',
-                  'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'guild',
+                  'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'unknown',
                   'user_name': people[r['user_id']]?['full_name'],
                   'username': people[r['user_id']]?['username'],
                 }))
@@ -542,7 +553,7 @@ class SupabaseCommunity implements CommunityApi {
           return Survey.fromMap({
             ...r,
             'publisher_name': pubs[r['publisher_id']]?.name ?? '',
-            'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'guild',
+            'publisher_kind': pubs[r['publisher_id']]?.kind ?? 'unknown',
             'questions': qs,
             'taken_by_me': taken.contains(r['id']),
             'mine': r['created_by'] == _uid || (me?.isSuperAdmin ?? false),
