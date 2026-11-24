@@ -31,11 +31,24 @@ android {
         versionName = flutter.versionName
     }
 
+    // One permanent key, so every new APK installs over the old one.
+    // GitHub Actions puts it in place from the ANDROID_KEYSTORE_BASE64 secret.
+    val keystoreFile = System.getenv("ANDROID_KEYSTORE_PATH")?.let { file(it) }
+    val keyPassword = System.getenv("ANDROID_KEY_PASSWORD")
+    signingConfigs {
+        if (keystoreFile != null && keystoreFile.exists() && keyPassword != null) {
+            create("release") {
+                storeFile = keystoreFile
+                storePassword = keyPassword
+                keyAlias = "campuslink"
+                this.keyPassword = keyPassword
+            }
+        }
+    }
+
     buildTypes {
         release {
-            // TODO: Add your own signing config for the release build.
-            // Signing with the debug keys for now, so `flutter run --release` works.
-            signingConfig = signingConfigs.getByName("debug")
+            signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
 }

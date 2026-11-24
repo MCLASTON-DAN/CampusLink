@@ -13,6 +13,7 @@ import 'features/community/policy_gate.dart';
 import 'features/courses/courses_screen.dart';
 import 'features/community/insights_screen.dart';
 import 'features/notifications/notifications.dart';
+import 'features/update/app_update.dart';
 import 'features/community/events_screens.dart';
 import 'features/community/map_screen.dart';
 import 'features/community/more_screens.dart';
@@ -168,7 +169,7 @@ class CampusLinkApp extends ConsumerWidget {
             statusBarColor: Colors.transparent,
             systemNavigationBarColor: Theme.of(context).colorScheme.surface,
           ),
-          child: child ?? const SizedBox.shrink(),
+          child: UpdateChecker(child: child ?? const SizedBox.shrink()),
         );
       },
     );
