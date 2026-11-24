@@ -67,6 +67,8 @@ abstract class CommunityApi {
   Future<bool> toggleLike(String targetType, String targetId);
   Future<void> report(String targetType, String targetId, String reason);
   Future<List<Report>> openReports();
+  /// Staff: close a report. actioned = the content was dealt with; false = dismissed.
+  Future<void> closeReport(String reportId, {required bool actioned});
 
   // ---- moderation (public log) ----
   /// action: remove | restore. Needs a reason (20+ characters).

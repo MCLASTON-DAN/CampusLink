@@ -143,6 +143,7 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         'event' => Icons.event_rounded,
         'tutor' => Icons.school_rounded,
         'request' => Icons.support_agent_rounded,
+        'office' => Icons.badge_rounded,
         _ => Icons.campaign_rounded,
       };
 

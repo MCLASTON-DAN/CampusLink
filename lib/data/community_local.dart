@@ -1255,4 +1255,15 @@ class LocalCommunity implements CommunityApi {
     out.sort((a, b) => b.publishedAt.compareTo(a.publishedAt));
     return _tick(out);
   }
+
+  @override
+  Future<void> closeReport(String reportId, {required bool actioned}) async {
+    if (!_me.isStaff) throw CommunityException('Only staff can close reports.');
+    final r = _list('reports');
+    for (final x in r) {
+      if (x['id'] == reportId) x['status'] = actioned ? 'actioned' : 'dismissed';
+    }
+    _put('reports', r);
+    await _save();
+  }
 }

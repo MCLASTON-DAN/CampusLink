@@ -188,14 +188,14 @@ class _ClaimsState extends ConsumerState<ClaimsScreen> {
                               icon: const Icon(Icons.check_circle, color: Colors.green),
                               onPressed: () async {
                                 await _run(context, () => api.decideClaim(c.id, approve: true));
-                                setState(() => _f = api.claimsFor(widget.itemId));
+                                if (mounted) setState(() => _f = api.claimsFor(widget.itemId));
                                 ref.invalidate(lostFoundProvider);
                               }),
                           IconButton(
                               icon: const Icon(Icons.cancel, color: Colors.redAccent),
                               onPressed: () async {
                                 await _run(context, () => api.decideClaim(c.id, approve: false));
-                                setState(() => _f = api.claimsFor(widget.itemId));
+                                if (mounted) setState(() => _f = api.claimsFor(widget.itemId));
                               }),
                         ])
                       : null,
@@ -712,10 +712,53 @@ class ReportsScreen extends ConsumerWidget {
               : ListView(padding: const EdgeInsets.all(12), children: [
                   for (final r in list)
                     Card(
-                      child: ListTile(
-                        title: Text('${r.targetType}: ${r.targetTitle}'),
-                        subtitle: Text(r.reason),
-                        trailing: r.targetType == 'post' ? TextButton(onPressed: () => context.push('/news/${r.targetId}'), child: const Text('Open')) : null,
+                      child: Padding(
+                        padding: const EdgeInsets.fromLTRB(4, 4, 4, 8),
+                        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+                          ListTile(
+                            title: Text('${r.targetType}: ${r.targetTitle}'),
+                            subtitle: Text('Reason: ${r.reason}\n${friendlyDate(r.createdAt)}'),
+                            isThreeLine: true,
+                          ),
+                          Wrap(alignment: WrapAlignment.end, spacing: 4, children: [
+                            if (r.targetType != 'comment')
+                              TextButton(
+                                onPressed: () => context.push(r.targetType == 'event' ? '/events/${r.targetId}' : '/news/${r.targetId}'),
+                                child: const Text('Open'),
+                              ),
+                            TextButton(
+                              onPressed: () async {
+                                await _run(context, () => ref.read(communityProvider).closeReport(r.id, actioned: false), ok: 'Report dismissed');
+                                ref.invalidate(_reportsProvider);
+                              },
+                              child: const Text('Dismiss'),
+                            ),
+                            FilledButton.tonal(
+                              onPressed: () async {
+                                final ok = await showDialog<bool>(
+                                  context: context,
+                                  builder: (ctx) => AlertDialog(
+                                    title: const Text('Remove this content?'),
+                                    content: Text('It will be hidden and listed in the Public record with the reason:\n"${r.reason}"'),
+                                    actions: [
+                                      TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                                      FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Remove')),
+                                    ],
+                                  ),
+                                );
+                                if (ok != true || !context.mounted) return;
+                                final api = ref.read(communityProvider);
+                                final reason = r.reason.length >= 20 ? r.reason : 'Reported by students: ${r.reason}';
+                                await _run(context, () async {
+                                  await api.moderate(action: 'remove', targetType: r.targetType, targetId: r.targetId, reason: reason);
+                                  await api.closeReport(r.id, actioned: true);
+                                }, ok: 'Removed');
+                                ref.invalidate(_reportsProvider);
+                              },
+                              child: const Text('Remove content'),
+                            ),
+                          ]),
+                        ]),
                       ),
                     ),
                 ]),

@@ -15,41 +15,56 @@ final currentUserProvider = StreamProvider<Profile?>(
   (ref) => ref.watch(repositoryProvider).currentUser,
 );
 
-final announcementsProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).announcements());
+/// Who is signed in (just the id). Every list below watches it, so when one
+/// person signs out and another signs in on the same phone, nothing from the
+/// first person is shown to the second.
+final _whoProvider = Provider<String?>((ref) => ref.watch(currentUserProvider).valueOrNull?.id);
 
-final officesProvider = FutureProvider((ref) => ref.watch(repositoryProvider).offices());
+CampusRepository _repo(Ref ref) {
+  ref.watch(_whoProvider);
+  return ref.watch(repositoryProvider);
+}
+
+CommunityApi _com(Ref ref) {
+  ref.watch(_whoProvider);
+  return ref.watch(communityProvider);
+}
+
+final announcementsProvider =
+    FutureProvider.autoDispose((ref) => _repo(ref).announcements());
+
+final officesProvider = FutureProvider((ref) => _repo(ref).offices());
 
 final myRequestsProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).myRequests());
+    FutureProvider.autoDispose((ref) => _repo(ref).myRequests());
 
 final requestUpdatesProvider = FutureProvider.autoDispose
-    .family<List<RequestUpdate>, String>((ref, id) => ref.watch(repositoryProvider).requestUpdates(id));
+    .family<List<RequestUpdate>, String>((ref, id) => _repo(ref).requestUpdates(id));
 
-final tutorsProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).tutors());
+final tutorsProvider = FutureProvider.autoDispose((ref) => _repo(ref).tutors());
 
 final studyGroupsProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).studyGroups());
+    FutureProvider.autoDispose((ref) => _repo(ref).studyGroups());
 
-final pollsProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).polls());
+final pollsProvider = FutureProvider.autoDispose((ref) => _repo(ref).polls());
 
 final buddyPairProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).myBuddyPair());
+    FutureProvider.autoDispose((ref) => _repo(ref).myBuddyPair());
 
-final mentorsProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).mentors());
+final mentorsProvider = FutureProvider.autoDispose((ref) => _repo(ref).mentors());
 
-final eventsProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).events());
+final eventsProvider = FutureProvider.autoDispose((ref) => _repo(ref).events());
 
-final clubsProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).clubs());
+final clubsProvider = FutureProvider.autoDispose((ref) => _repo(ref).clubs());
 
 final timetableProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).timetable());
+    FutureProvider.autoDispose((ref) => _repo(ref).timetable());
 
 /// "Where do I go?" – searches offices, announcements, events, groups, clubs.
 final smartSearchProvider =
     FutureProvider.autoDispose.family<List<SearchHit>, String>((ref, query) async {
   if (query.trim().length < 2) return const [];
-  final repo = ref.watch(repositoryProvider);
+  final repo = _repo(ref);
   final results = await Future.wait([
     repo.offices(),
     repo.announcements(),
@@ -71,46 +86,46 @@ final smartSearchProvider =
 final communityProvider = Provider<CommunityApi>((ref) => ref.watch(repositoryProvider).community);
 
 final postsProvider = FutureProvider.autoDispose.family<List<Post>, String?>(
-    (ref, kind) => ref.watch(communityProvider).posts(kind: kind));
+    (ref, kind) => _com(ref).posts(kind: kind));
 
 final featuredEventsProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).featuredEvents());
+    FutureProvider.autoDispose((ref) => _com(ref).featuredEvents());
 
 final myMembershipsProvider = FutureProvider.autoDispose((ref) async {
   ref.watch(currentUserProvider);
-  return ref.watch(communityProvider).myMemberships();
+  return _com(ref).myMemberships();
 });
 
-final campusesProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).campuses());
+final campusesProvider = FutureProvider.autoDispose((ref) => _com(ref).campuses());
 
 final majorRequestsProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).majorRequests());
+    FutureProvider.autoDispose((ref) => _com(ref).majorRequests());
 
 final moderationLogProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).moderationLog());
+    FutureProvider.autoDispose((ref) => _com(ref).moderationLog());
 
-final lostFoundProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).lostFound());
+final lostFoundProvider = FutureProvider.autoDispose((ref) => _com(ref).lostFound());
 
-final surveysProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).surveys());
+final surveysProvider = FutureProvider.autoDispose((ref) => _com(ref).surveys());
 
-final tutorCardsProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).tutorCards());
+final tutorCardsProvider = FutureProvider.autoDispose((ref) => _com(ref).tutorCards());
 
 final myTutorRequestsProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).myTutorRequests());
+    FutureProvider.autoDispose((ref) => _com(ref).myTutorRequests());
 
 // ---- course units, tutor reports, notifications ----
 final teachingUnitsProvider = FutureProvider.autoDispose((ref) {
   ref.watch(currentUserProvider);
-  return ref.watch(communityProvider).myTeachingUnits();
+  return _com(ref).myTeachingUnits();
 });
-final courseNoticesProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).courseNotices());
-final courseLecturersProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).courseLecturers());
+final courseNoticesProvider = FutureProvider.autoDispose((ref) => _com(ref).courseNotices());
+final courseLecturersProvider = FutureProvider.autoDispose((ref) => _com(ref).courseLecturers());
 final tutorReportSummaryProvider =
-    FutureProvider.autoDispose((ref) => ref.watch(communityProvider).tutorReportSummary());
+    FutureProvider.autoDispose((ref) => _com(ref).tutorReportSummary());
 
 final notificationsProvider = FutureProvider.autoDispose((ref) {
   ref.watch(currentUserProvider);
-  return ref.watch(communityProvider).notifications();
+  return _com(ref).notifications();
 });
 final unreadNotificationsProvider = Provider.autoDispose<int>(
     (ref) => ref.watch(notificationsProvider).valueOrNull?.where((n) => !n.read).length ?? 0);

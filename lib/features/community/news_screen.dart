@@ -49,7 +49,7 @@ class _NewsScreenState extends ConsumerState<NewsScreen> {
     setState(() => _loadingMore = true);
     try {
       final page = await ref.read(communityProvider).posts(kind: _kind, before: all.last.publishedAt);
-      setState(() {
+      if (mounted) setState(() {
         _more.addAll(page);
         _end = page.length < 20;
       });
@@ -369,7 +369,7 @@ class _ReactionsState extends ConsumerState<Reactions> {
         onPressed: () async {
           try {
             final now = await api.toggleLike(widget.targetType, widget.targetId);
-            setState(() {
+            if (mounted) setState(() {
               _liked = now;
               _likes += now ? 1 : -1;
             });

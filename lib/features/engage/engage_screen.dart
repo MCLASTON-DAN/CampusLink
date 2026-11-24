@@ -210,7 +210,7 @@ class _FeedbackTabState extends ConsumerState<_FeedbackTab> {
             if (_msg.text.trim().isEmpty) return;
             await ref.read(repositoryProvider).submitFeedback(topic: _topic, message: _msg.text.trim(), sentiment: _sentiment);
             _msg.clear();
-            setState(() => _sent = true);
+            if (mounted) setState(() => _sent = true);
           },
           icon: const Icon(Icons.send_rounded),
           label: const Text('Send anonymously'),

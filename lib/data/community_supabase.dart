@@ -33,6 +33,20 @@ class SupabaseCommunity implements CommunityApi {
       }
       if (m.contains('duplicate key')) throw CommunityException('That already exists.');
       throw CommunityException(m);
+    } on StorageException catch (e) {
+      throw CommunityException(e.message.contains('size') || e.message.contains('large')
+          ? 'That file is too big.'
+          : 'Could not upload the file: ${e.message}');
+    } on CommunityException {
+      rethrow;
+    } catch (e) {
+      // No signal, timeouts, server unreachable: never leave a button spinning.
+      final t = '$e'.toLowerCase();
+      if (t.contains('socket') || t.contains('network') || t.contains('failed host') ||
+          t.contains('clientexception') || t.contains('timeout') || t.contains('connection')) {
+        throw CommunityException('No internet connection. Check your data or Wi-Fi and try again.');
+      }
+      throw CommunityException('Something went wrong. Please try again.');
     }
   }
 
@@ -954,4 +968,11 @@ class SupabaseCommunity implements CommunityApi {
         final rows = await _client.rpc('post_insights', params: {'p_days': days}) as List;
         return rows.map((r) => PostInsight.fromMap(Map<String, dynamic>.from(r))).toList();
       });
+
+  @override
+  Future<void> closeReport(String reportId, {required bool actioned}) => _guard(() => _client.from('reports').update({
+        'status': actioned ? 'actioned' : 'dismissed',
+        'handled_by': _uid,
+        'handled_at': DateTime.now().toUtc().toIso8601String(),
+      }).eq('id', reportId));
 }
