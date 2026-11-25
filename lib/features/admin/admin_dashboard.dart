@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
+import '../community/tutor_checks.dart';
 import '../../data/community_models.dart';
 import '../../data/providers.dart';
 import '../../widgets/section.dart';
@@ -17,6 +18,7 @@ class AdminDashboardScreen extends ConsumerWidget {
   @override
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(_overviewProvider);
+    final checks = ref.watch(gradeProofQueueProvider).valueOrNull ?? const [];
     return Scaffold(
       appBar: AppBar(title: const Text('Dashboard')),
       body: RefreshIndicator(
@@ -39,6 +41,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             _Tiles([
               ('Reported content', o.n('open_reports'), 'waiting for a decision', Icons.flag_rounded, '/reports'),
               ('Tutor reports', o.n('open_tutor_reports'), 'open', Icons.report_gmailerrorred_rounded, '/tutor-reports'),
+              ('Grade checks', checks.length, checks.any((c) => c.overdue) ? '${checks.where((c) => c.overdue).length} waiting 3+ days' : 'results slips waiting', Icons.fact_check_rounded, '/tutor-checks'),
               ('Major event requests', o.n('major_requests'), 'need your approval', Icons.star_rounded, '/events/requests'),
               ('Lost & found claims', o.n('pending_claims'), 'pending', Icons.inventory_2_rounded, '/lostfound'),
               ('Help requests', o.n('open_help'), 'open or in progress', Icons.support_agent_rounded, '/requests'),

@@ -153,9 +153,9 @@ class LocalCommunity implements CommunityApi {
     }
     _s['reviews'] = reviews;
     _s['tutorModules'] = [
-      {'id': 'm1', 'tutor_id': 'u-tutor-1', 'course_code': 'STA2101', 'course_name': 'Statistics', 'grade_achieved': 'A', 'price_ugx': 15000},
+      {'id': 'm1', 'tutor_id': 'u-tutor-1', 'course_code': 'STA2101', 'course_name': 'Statistics', 'grade_achieved': 'A', 'price_ugx': 15000, 'grade_checked': true},
       {'id': 'm2', 'tutor_id': 'u-tutor-1', 'course_code': 'BDA2207', 'course_name': 'Data Analysis', 'grade_achieved': 'A', 'price_ugx': 15000},
-      {'id': 'm3', 'tutor_id': 'u-tutor-2', 'course_code': 'CSC2102', 'course_name': 'Databases', 'grade_achieved': 'B+', 'price_ugx': 10000},
+      {'id': 'm3', 'tutor_id': 'u-tutor-2', 'course_code': 'CSC2102', 'course_name': 'Databases', 'grade_achieved': 'B+', 'price_ugx': 10000, 'grade_checked': true},
       {'id': 'm4', 'tutor_id': 'u-tutor-3', 'course_code': 'WEB2201', 'course_name': 'Web Development', 'grade_achieved': 'A', 'price_ugx': 12000},
     ];
     _s['tutorProfiles']['u-tutor-1'] = {'bio': 'Third-year BDSAI. Patient with beginners (sample profile).', 'contact': null, 'availability': 'Weekday evenings'};
@@ -906,10 +906,12 @@ class LocalCommunity implements CommunityApi {
     return (score: (score * 100).round() / 100, reviews: mine.length, reviewers: reviewers);
   }
 
-  /// Blue tick rule: 10+ reviews from 5+ students and score 4.2+.
+  /// Blue tick = Level 4 (same rule as the database, 0014).
   bool _verified(String tutorId) {
     final s = _score(tutorId);
-    return s.reviews >= 10 && s.reviewers >= 5 && s.score >= 4.2;
+    final checked = _list('tutorModules').any((m) => m['tutor_id'] == tutorId && m['grade_checked'] == true);
+    final lessons = _list('requests').where((r) => r['tutor_id'] == tutorId && r['status'] == 'completed').length;
+    return checked && lessons >= 30 && s.score >= 4.3 && s.reviewers >= 5;
   }
 
   TutorCard _card(String id, String name, String? programme, int? year) {
@@ -940,7 +942,7 @@ class LocalCommunity implements CommunityApi {
     if (me != null && me.isTutor && (_s['tutorProfiles'] as Map).containsKey(me.id)) {
       cards.add(_card(me.id, me.fullName, me.programme, me.yearOfStudy));
     }
-    cards.sort((a, b) => b.score.compareTo(a.score));
+    cards.sort((a, b) => a.levelNo != b.levelNo ? b.levelNo.compareTo(a.levelNo) : b.score.compareTo(a.score));
     return _tick(cards);
   }
 
@@ -960,10 +962,16 @@ class LocalCommunity implements CommunityApi {
   }) async {
     final me = _me;
     (_s['tutorProfiles'] as Map)[me.id] = {'bio': bio.trim(), 'contact': contact, 'availability': availability.trim()};
+    final before = {
+      for (final m in _list('tutorModules').where((m) => m['tutor_id'] == me.id)) normCode(m['course_code']): m
+    };
     final all = _list('tutorModules')..removeWhere((m) => m['tutor_id'] == me.id);
     for (final m in modules) {
       if (m.priceUgx < 0 || m.priceUgx > 500000) throw CommunityException('Price must be between 0 and 500,000 UGX per hour');
-      all.add({...m.toMap(), 'id': _uuid.v4(), 'tutor_id': me.id});
+      final old = before[normCode(m.courseCode)];
+      // A check survives a save only if the grade did not change.
+      final keepCheck = old != null && old['grade_checked'] == true && (old['grade_achieved'] ?? '').toString().trim() == (m.grade ?? '').trim();
+      all.add({...m.toMap(), 'course_code': normCode(m.courseCode), 'id': old?['id'] ?? _uuid.v4(), 'tutor_id': me.id, 'grade_checked': keepCheck});
     }
     _put('tutorModules', all);
     await _save();
@@ -1405,6 +1413,82 @@ class LocalCommunity implements CommunityApi {
     }
     a.add({'question_id': questionId, 'user_id': _me.id, 'option_index': option});
     _put('postAnswers', a);
+    await _save();
+  }
+
+  // ---------------------------------------------------------- grade checks
+  bool _canReview(String code) =>
+      _me.isStaff || _list('lecturers').any((l) => l['lecturer_id'] == _me.id && l['course_code'] == normCode(code));
+
+  @override
+  Future<List<GradeProof>> myGradeProofs() => _tick([
+        for (final r in _list('gradeProofs').where((r) => r['tutor_id'] == _me.id).toList().reversed) GradeProof.fromMap(r)
+      ]);
+
+  @override
+  Future<void> sendGradeProof(
+      {required String courseCode, required String grade, required Uint8List bytes, required String extension}) async {
+    if (bytes.length > 5 * 1024 * 1024) throw CommunityException('The file must be under 5 MB.');
+    final code = normCode(courseCode);
+    final mine = _list('tutorModules').where((m) => m['tutor_id'] == _me.id && normCode(m['course_code']) == code).firstOrNull;
+    if (mine == null || (mine['grade_achieved'] ?? '').toString().trim() != grade.trim()) {
+      throw CommunityException('Save $code with this grade in your tutor profile first.');
+    }
+    final list = _list('gradeProofs');
+    if (list.any((r) => r['tutor_id'] == _me.id && r['course_code'] == code && r['status'] == 'pending')) {
+      throw CommunityException('You already sent a slip for $code. Wait for it to be checked.');
+    }
+    final ext = extension.toLowerCase().replaceAll('.', '');
+    final mime = ext == 'pdf' ? 'application/pdf' : (ext == 'png' ? 'image/png' : 'image/jpeg');
+    list.add(GradeProof(
+      id: _uuid.v4(),
+      tutorId: _me.id,
+      courseCode: code,
+      grade: grade.trim(),
+      filePath: 'data:$mime;base64,${base64Encode(bytes)}',
+      status: 'pending',
+      createdAt: DateTime.now(),
+    ).toMap());
+    _put('gradeProofs', list);
+    await _save();
+  }
+
+  @override
+  Future<List<GradeProof>> gradeProofQueue() {
+    String name(String id) =>
+        id == _me.id ? _me.fullName : (SeedData.tutors.where((t) => t.id == id).firstOrNull?.fullName ?? _demoPeople.where((p) => p.id == id).firstOrNull?.fullName ?? 'Tutor');
+    return _tick([
+      for (final r in _list('gradeProofs'))
+        if (r['status'] == 'pending' && r['tutor_id'] != _me.id && _canReview(r['course_code']))
+          GradeProof.fromMap(r, name: name(r['tutor_id']))
+    ]);
+  }
+
+  @override
+  Future<String> gradeProofLink(String filePath) async => filePath;
+
+  @override
+  Future<void> reviewGradeProof(String proofId, {required bool approve, String? reason}) async {
+    final list = _list('gradeProofs');
+    final i = list.indexWhere((r) => r['id'] == proofId);
+    if (i < 0) throw CommunityException('That check was not found.');
+    final pr = list[i];
+    if (pr['status'] != 'pending') throw CommunityException('Someone already decided this one.');
+    if (!_canReview(pr['course_code'])) throw CommunityException('Only a lecturer of ${pr['course_code']} or staff can check this.');
+    if (pr['tutor_id'] == _me.id) throw CommunityException('You cannot check your own grades.');
+    if (!approve && (reason ?? '').trim().length < 5) throw CommunityException('Say why it was not accepted, so the tutor can fix it.');
+    if (approve) {
+      final mods = _list('tutorModules');
+      final j = mods.indexWhere((m) =>
+          m['tutor_id'] == pr['tutor_id'] &&
+          normCode(m['course_code']) == pr['course_code'] &&
+          (m['grade_achieved'] ?? '').toString().trim() == pr['grade_claimed']);
+      if (j < 0) throw CommunityException('The tutor changed this unit or grade after uploading. Reject it and ask them to upload again.');
+      mods[j]['grade_checked'] = true;
+      _put('tutorModules', mods);
+    }
+    list[i] = {...pr, 'status': approve ? 'approved' : 'rejected', 'reason': (reason ?? '').trim().isEmpty ? null : reason!.trim(), 'file_path': ''};
+    _put('gradeProofs', list);
     await _save();
   }
 

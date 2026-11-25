@@ -661,12 +661,15 @@ class TutorModule {
   final String? courseName;
   final String? grade;
   final int priceUgx; // per hour
+  /// A reviewer saw the results slip for this unit and grade.
+  final bool gradeChecked;
   const TutorModule({
     required this.id,
     required this.courseCode,
     this.courseName,
     this.grade,
     required this.priceUgx,
+    this.gradeChecked = false,
   });
 
   factory TutorModule.fromMap(Map<String, dynamic> m) => TutorModule(
@@ -675,6 +678,7 @@ class TutorModule {
         courseName: m['course_name'],
         grade: m['grade_achieved'],
         priceUgx: (m['price_ugx'] ?? 0) as int,
+        gradeChecked: m['grade_checked'] == true,
       );
 
   Map<String, dynamic> toMap() => {
@@ -683,13 +687,17 @@ class TutorModule {
         'course_name': courseName,
         'grade_achieved': grade,
         'price_ugx': priceUgx,
+        'grade_checked': gradeChecked,
       };
 }
 
-/// A tutor as shown to students: who they are, what they teach, how they are rated.
+/// Same rule as the database's norm_code(): no spaces, capitals.
+String normCode(String c) => c.toUpperCase().replaceAll(RegExp(r'\s+'), '');
+
 class TutorCard {
   final String tutorId;
   final String name;
+  final String? username;
   final String? programme;
   final int? year;
   final bool verified; // blue tick, earned
@@ -704,6 +712,7 @@ class TutorCard {
   const TutorCard({
     required this.tutorId,
     required this.name,
+    this.username,
     this.programme,
     this.year,
     this.verified = false,
@@ -716,6 +725,7 @@ class TutorCard {
     this.reviewers = 0,
     this.lessons = 0,
     this.paused = false,
+    this.upheld = 0,
   });
 
   /// Lessons the tutor has actually taught (students confirmed them).
@@ -723,13 +733,70 @@ class TutorCard {
   /// Hidden from the list while 3+ students have open reports.
   final bool paused;
 
-  /// Grows with real teaching: New -> Rising -> Experienced -> Expert.
-  String get level {
-    if (lessons >= 50 && score >= 4.3) return 'Expert';
-    if (lessons >= 20) return 'Experienced';
-    if (lessons >= 5) return 'Rising';
-    return 'New';
+  /// Reports staff upheld against this tutor.
+  final int upheld;
+
+  /// Units whose grade a reviewer checked.
+  List<TutorModule> get checkedModules => modules.where((m) => m.gradeChecked).toList();
+
+  /// The 4 levels. Same rules as the database (0014):
+  /// 1 New: grades typed in only. Found by search, never suggested.
+  /// 2 Grade-checked: a results slip was checked. Suggested for those units.
+  /// 3 Experienced: + 10 lessons and rating 4.0+ from 3+ reviews.
+  /// 4 Expert: the blue tick (30 lessons, 4.3+, 5+ reviewers, no upheld reports).
+  int get levelNo {
+    if (verified) return 4;
+    if (checkedModules.isEmpty) return 1;
+    if (lessons >= 10 && reviews >= 3 && score >= 4.0 && upheld == 0) return 3;
+    return 2;
   }
+
+  String get level => const ['New', 'Grade-checked', 'Experienced', 'Expert'][levelNo - 1];
+
+  /// Shown in the platform's suggestions (not just search).
+  bool get suggested => levelNo >= 2 && !paused;
+}
+
+/// A tutor's results slip waiting for, or past, a check.
+class GradeProof {
+  GradeProof({
+    required this.id,
+    required this.tutorId,
+    this.tutorName = '',
+    required this.courseCode,
+    required this.grade,
+    required this.filePath,
+    required this.status,
+    this.reason,
+    required this.createdAt,
+  });
+  final String id, tutorId, tutorName, courseCode, grade, filePath, status;
+  final String? reason;
+  final DateTime createdAt;
+  bool get pending => status == 'pending';
+  /// Waiting longer than this shows up as overdue for staff.
+  bool get overdue => pending && DateTime.now().difference(createdAt).inDays >= 3;
+  factory GradeProof.fromMap(Map<String, dynamic> m, {String name = ''}) => GradeProof(
+        id: m['id'],
+        tutorId: m['tutor_id'],
+        tutorName: name,
+        courseCode: m['course_code'] ?? '',
+        grade: m['grade_claimed'] ?? '',
+        filePath: m['file_path'] ?? '',
+        status: m['status'] ?? 'pending',
+        reason: m['reason'],
+        createdAt: DateTime.parse(m['created_at'].toString()),
+      );
+  Map<String, dynamic> toMap() => {
+        'id': id,
+        'tutor_id': tutorId,
+        'course_code': courseCode,
+        'grade_claimed': grade,
+        'file_path': filePath,
+        'status': status,
+        'reason': reason,
+        'created_at': createdAt.toIso8601String(),
+      };
 }
 
 const tutorReportReasons = {

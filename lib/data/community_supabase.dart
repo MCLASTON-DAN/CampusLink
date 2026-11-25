@@ -652,9 +652,11 @@ class SupabaseCommunity implements CommunityApi {
   Future<List<TutorCard>> tutorCards() => _guard(() async {
         final people = await _client
             .from('public_profiles')
-            .select('id, full_name, programme, year_of_study, tutor_verified')
+            .select('id, full_name, username, programme, year_of_study, tutor_verified')
             .eq('is_tutor', true);
         // Tutors under review (3+ open reports) are hidden until staff decide.
+        // New tutors are included: the screen shows them only to people who
+        // search for them; suggestions show level 2 and up.
         return (await _cards(List<Map<String, dynamic>>.from(people))).where((c) => !c.paused).toList();
       });
 
@@ -664,7 +666,12 @@ class SupabaseCommunity implements CommunityApi {
     final profiles = await _client.from('tutor_profiles').select().inFilter('tutor_id', ids);
     final modules = await _client.from('tutor_modules').select().inFilter('tutor_id', ids).eq('is_active', true);
     final scores = await _client.from('tutor_scores').select().inFilter('tutor_id', ids);
-    final stats = await _client.rpc('tutor_stats') as List;
+    List stats;
+    try {
+      stats = await _client.rpc('tutor_trust') as List; // has upheld reports (0014)
+    } on PostgrestException {
+      stats = await _client.rpc('tutor_stats') as List; // database not updated yet
+    }
     final stById = {for (final s in stats) s['tutor_id'] as String: s};
     final pById = {for (final p in profiles) p['tutor_id'] as String: p};
     final sById = {for (final s in scores) s['tutor_id'] as String: s};
@@ -675,6 +682,7 @@ class SupabaseCommunity implements CommunityApi {
       return TutorCard(
         tutorId: id,
         name: p['full_name'] ?? '',
+        username: p['username'],
         programme: p['programme'],
         year: p['year_of_study'],
         verified: p['tutor_verified'] ?? false,
@@ -687,9 +695,11 @@ class SupabaseCommunity implements CommunityApi {
         reviewers: ((sc?['reviewers'] ?? 0) as num).toInt(),
         lessons: ((stById[id]?['lessons'] ?? 0) as num).toInt(),
         paused: stById[id]?['paused'] == true,
+        upheld: ((stById[id]?['upheld'] ?? 0) as num).toInt(),
       );
     }).toList()
-      ..sort((a, b) => b.score.compareTo(a.score));
+      // Higher level first, then the fair score.
+      ..sort((a, b) => a.levelNo != b.levelNo ? b.levelNo.compareTo(a.levelNo) : b.score.compareTo(a.score));
     return cards;
   }
 
@@ -697,7 +707,7 @@ class SupabaseCommunity implements CommunityApi {
   Future<TutorCard?> myTutorCard() => _guard(() async {
         final p = await _client
             .from('public_profiles')
-            .select('id, full_name, programme, year_of_study, tutor_verified')
+            .select('id, full_name, username, programme, year_of_study, tutor_verified')
             .eq('id', _uid)
             .maybeSingle();
         if (p == null) return null;
@@ -721,19 +731,26 @@ class SupabaseCommunity implements CommunityApi {
           'availability': availability.trim(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         });
-        await _client.from('tutor_modules').delete().eq('tutor_id', _uid);
+        // Update units in place (a checked grade stays checked unless its grade
+        // changes), add new ones, THEN remove dropped ones. A failure half-way
+        // never wipes a tutor's units or their checks.
+        final codes = {for (final m in modules) normCode(m.courseCode)};
         if (modules.isNotEmpty) {
-          await _client.from('tutor_modules').insert([
+          await _client.from('tutor_modules').upsert([
             for (final m in modules)
               {
                 'tutor_id': _uid,
-                'course_code': m.courseCode.trim().toUpperCase(),
+                'course_code': normCode(m.courseCode),
                 'course_name': m.courseName,
-                'grade_achieved': m.grade,
+                'grade_achieved': m.grade?.trim(),
                 'price_ugx': m.priceUgx,
+                'is_active': true,
               }
-          ]);
+          ], onConflict: 'tutor_id,course_code');
         }
+        final existing = await _client.from('tutor_modules').select('id, course_code').eq('tutor_id', _uid);
+        final drop = [for (final r in existing) if (!codes.contains(r['course_code'] as String)) r['id'] as String];
+        if (drop.isNotEmpty) await _client.from('tutor_modules').delete().inFilter('id', drop);
       });
 
   @override
@@ -1052,6 +1069,67 @@ class SupabaseCommunity implements CommunityApi {
   @override
   Future<void> answerQuestion(String questionId, int option) =>
       _guard(() => _client.rpc('answer_post_question', params: {'p_question': questionId, 'p_option': option}));
+
+  // ---------------------------------------------------------- grade checks
+  @override
+  Future<List<GradeProof>> myGradeProofs() => _guard(() async {
+        final rows = await _client.from('tutor_grade_proofs').select().eq('tutor_id', _uid).order('created_at', ascending: false);
+        return [for (final r in rows) GradeProof.fromMap(r)];
+      });
+
+  @override
+  Future<void> sendGradeProof(
+          {required String courseCode, required String grade, required Uint8List bytes, required String extension}) =>
+      _guard(() async {
+        if (bytes.length > 5 * 1024 * 1024) throw CommunityException('The file must be under 5 MB.');
+        final ext = extension.toLowerCase().replaceAll('.', '');
+        final mime = switch (ext) {
+          'pdf' => 'application/pdf',
+          'png' => 'image/png',
+          'webp' => 'image/webp',
+          'jpg' || 'jpeg' => 'image/jpeg',
+          _ => throw CommunityException('Send a photo (JPG/PNG) or a PDF of your results.'),
+        };
+        final code = normCode(courseCode);
+        final path = '$_uid/$code/${_uuid.v4()}.${ext == 'jpg' ? 'jpeg' : ext}';
+        await _client.storage.from('grade-proofs').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime));
+        try {
+          await _client.from('tutor_grade_proofs').insert({'course_code': code, 'grade_claimed': grade.trim(), 'file_path': path});
+        } catch (e) {
+          // Don't leave a private file lying around if the record failed.
+          await _client.storage.from('grade-proofs').remove([path]).catchError((_) => <FileObject>[]);
+          if (e is PostgrestException && e.code == '23505') {
+            throw CommunityException('You already sent a slip for $code. Wait for it to be checked.');
+          }
+          rethrow;
+        }
+      });
+
+  @override
+  Future<List<GradeProof>> gradeProofQueue() => _guard(() async {
+        final rows = await _client
+            .from('tutor_grade_proofs')
+            .select()
+            .eq('status', 'pending')
+            .neq('tutor_id', _uid)
+            .order('created_at');
+        final people = await _people([for (final r in rows) r['tutor_id'] as String]);
+        return [for (final r in rows) GradeProof.fromMap(r, name: people[r['tutor_id']]?['full_name'] ?? '')];
+      });
+
+  @override
+  Future<String> gradeProofLink(String filePath) =>
+      _guard(() => _client.storage.from('grade-proofs').createSignedUrl(filePath, 600));
+
+  @override
+  Future<void> reviewGradeProof(String proofId, {required bool approve, String? reason}) => _guard(() async {
+        final path = await _client.rpc('review_grade_proof',
+            params: {'p_proof': proofId, 'p_approve': approve, 'p_reason': reason}) as String?;
+        // We don't keep results slips after the decision.
+        if (path != null) {
+          await _client.storage.from('grade-proofs').remove([path]).catchError((_) => <FileObject>[]);
+        }
+      });
 
   @override
   Future<void> addPostQuestions(String postId, List<PostQuestion> questions) => _guard(() async {

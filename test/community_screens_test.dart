@@ -19,6 +19,7 @@ import 'package:campuslink/features/notifications/notifications.dart';
 import 'package:campuslink/features/community/policy_gate.dart';
 import 'package:campuslink/features/legal/policies.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:campuslink/features/community/tutor_checks.dart';
 
 void main() {
   final screens = <String, Widget Function()>{
@@ -55,6 +56,7 @@ void main() {
     'privacy': () => const PolicyScreen(doc: privacyPolicy),
     'terms': () => const PolicyScreen(doc: termsOfUse),
     'event detail': () => const EventDetailScreen(eventId: 'ev-1'),
+    'grade checks': () => const GradeChecksScreen(),
     'edit office': () => const OfficeEditScreen(officeId: 'off-registrar'),
   };
 

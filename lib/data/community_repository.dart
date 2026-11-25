@@ -183,6 +183,18 @@ abstract class CommunityApi {
   Future<void> reportTutor({required String tutorId, required String reason, required String details});
   /// Staff only: reports per tutor and reason, with percentages.
   Future<List<TutorReportRow>> tutorReportSummary();
+  // ---- tutor grade checks ----
+  /// My results slips and their status.
+  Future<List<GradeProof>> myGradeProofs();
+  /// Upload a results slip (photo or PDF, under 5 MB) for one of my units.
+  Future<void> sendGradeProof({required String courseCode, required String grade, required Uint8List bytes, required String extension});
+  /// Slips I may check (staff: all; lecturers: their units). Never my own.
+  Future<List<GradeProof>> gradeProofQueue();
+  /// A short-lived private link to view a slip.
+  Future<String> gradeProofLink(String filePath);
+  /// Approve or reject. Rejecting needs a reason. The slip is then deleted.
+  Future<void> reviewGradeProof(String proofId, {required bool approve, String? reason});
+
   /// Staff only: close all open reports for a tutor.
   Future<void> closeTutorReports(String tutorId, {required bool upheld});
 

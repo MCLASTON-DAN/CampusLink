@@ -10,6 +10,7 @@ import '../../data/providers.dart';
 import '../../widgets/badge.dart';
 import '../../widgets/person_picker.dart';
 import '../../widgets/common.dart';
+import 'tutor_checks.dart';
 
 Future<void> _run(BuildContext context, Future<void> Function() f, {String? ok}) async {
   try {
@@ -427,64 +428,116 @@ class _CreateSurveyState extends ConsumerState<CreateSurveyScreen> {
 }
 
 // ------------------------------------------------------------ tutors
-class TutorsScreen extends ConsumerWidget {
+class TutorsScreen extends ConsumerStatefulWidget {
   const TutorsScreen({super.key});
   @override
-  Widget build(BuildContext context, WidgetRef ref) {
+  ConsumerState<TutorsScreen> createState() => _TutorsScreenState();
+}
+
+class _TutorsScreenState extends ConsumerState<TutorsScreen> {
+  final _q = TextEditingController();
+  String get _query => _q.text.trim().toLowerCase().replaceFirst('@', '');
+
+  /// Search finds any tutor (also New ones) by name, @username or unit.
+  bool _matches(TutorCard t) {
+    final q = _query;
+    if (q.isEmpty) return true;
+    final code = normCode(q).toLowerCase();
+    return t.name.toLowerCase().contains(q) ||
+        (t.username ?? '').toLowerCase().contains(q) ||
+        t.modules.any((m) => m.courseCode.toLowerCase().contains(code) || (m.courseName ?? '').toLowerCase().contains(q));
+  }
+
+  @override
+  Widget build(BuildContext context) {
     final fmt = NumberFormat('#,###');
+    final searching = _query.isNotEmpty;
     return Scaffold(
       appBar: AppBar(title: const Text('Tutors'), actions: [
+        IconButton(icon: const Icon(Icons.help_outline_rounded), tooltip: 'What the levels mean', onPressed: () => showTutorLevels(context)),
         IconButton(icon: const Icon(Icons.assignment_ind_outlined), tooltip: 'My lessons', onPressed: () => context.push('/tutors/mine')),
       ]),
       body: AsyncBody(
         value: ref.watch(tutorCardsProvider),
         onRetry: () => ref.invalidate(tutorCardsProvider),
-        builder: (list) => ListView(padding: const EdgeInsets.all(12), children: [
-          const Padding(
-              padding: EdgeInsets.only(bottom: 8),
-              child: Text('Tutors are year 2 or above and show the grade they got in each unit. '
-                  'Scores are fair: a few reviews count less, and only students who had a confirmed lesson can review. '
-                  'Levels grow with real lessons taught (New → Rising → Experienced → Expert). '
-                  'Blue tick = verified by many good reviews. It cannot be bought.')),
-          if (list.isEmpty) const EmptyState(icon: Icons.school_outlined, title: 'No tutors yet'),
-          for (final t in list)
-            Card(
-              child: Padding(
-                padding: const EdgeInsets.all(14),
-                child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-                  Wrap(spacing: 12, crossAxisAlignment: WrapCrossAlignment.center, children: [
-                    NameWithBadge(t.name, t.verified ? 'blue' : null, style: Theme.of(context).textTheme.titleMedium),
-                    if (t.reviews > 0) Text('★ ${t.score.toStringAsFixed(2)}  (${t.reviews})', style: const TextStyle(fontWeight: FontWeight.w700)) else const Text('No reviews yet'),
-                    _LevelChip(t.level, t.lessons),
-                  ]),
-                  if (t.bio.isNotEmpty) Text(t.bio),
-                  if (t.availability.isNotEmpty) Text('Free: ${t.availability}', style: Theme.of(context).textTheme.bodySmall),
-                  const SizedBox(height: 6),
-                  for (final m in t.modules)
-                    ListTile(
-                      dense: true,
-                      contentPadding: EdgeInsets.zero,
-                      title: Text('${m.courseCode}${m.courseName == null ? '' : ' · ${m.courseName}'}'),
-                      subtitle: Text('UGX ${fmt.format(m.priceUgx)} per hour${m.grade == null ? '' : ' · grade ${m.grade}'}'),
-                      isThreeLine: true,
-                      trailing: TextButton(
-                        onPressed: () async {
-                          final msg = await _prompt(context, 'Message to ${t.name}', min: 5, hint: 'When are you free? What do you need help with?');
-                          if (msg == null || !context.mounted) return;
-                          await _run(context, () => ref.read(communityProvider).requestTutor(tutorId: t.tutorId, courseCode: m.courseCode, message: msg), ok: 'Request sent');
-                        },
-                        child: const Text('Ask'),
-                      ),
-                    ),
-                  if ((t.contact ?? '').isNotEmpty)
-                    TextButton.icon(
-                        onPressed: () => launchUrl(Uri.parse('https://wa.me/${t.contact!.replaceAll(RegExp(r'[^0-9]'), '')}')),
-                        icon: const Icon(Icons.chat_rounded),
-                        label: const Text('WhatsApp')),
-                ]),
+        builder: (all) {
+          // Suggestions: level 2+ only, showing only the units that were checked.
+          // Search: everyone who matches, with every unit and a clear label.
+          final list = searching ? all.where(_matches).toList() : all.where((t) => t.suggested).toList();
+          return ListView(padding: const EdgeInsets.all(12), children: [
+            TextField(
+              controller: _q,
+              onChanged: (_) => setState(() {}),
+              decoration: InputDecoration(
+                prefixIcon: const Icon(Icons.search_rounded),
+                hintText: 'Search a name, @username or unit (e.g. BDA2207)',
+                suffixIcon: searching
+                    ? IconButton(icon: const Icon(Icons.close_rounded), onPressed: () => setState(_q.clear))
+                    : null,
               ),
             ),
-        ]),
+            const SizedBox(height: 8),
+            Text(
+              searching
+                  ? 'Showing every tutor who matches, including new ones whose grades are not checked yet.'
+                  : 'Suggested tutors: a lecturer or staff member checked their results. Search to find anyone else.',
+              style: Theme.of(context).textTheme.bodySmall,
+            ),
+            const SizedBox(height: 8),
+            if (list.isEmpty)
+              EmptyState(
+                icon: Icons.school_outlined,
+                title: searching ? 'No tutor matches' : 'No suggested tutors yet',
+                subtitle: searching ? null : 'Tutors appear here once their grades are checked. Search to find new tutors.',
+              ),
+            for (final t in list)
+              Card(
+                child: Padding(
+                  padding: const EdgeInsets.all(14),
+                  child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+                    Wrap(spacing: 12, runSpacing: 4, crossAxisAlignment: WrapCrossAlignment.center, children: [
+                      NameWithBadge(t.name, t.verified ? 'blue' : null, style: Theme.of(context).textTheme.titleMedium),
+                      if ((t.username ?? '').isNotEmpty) Text('@${t.username}', style: Theme.of(context).textTheme.bodySmall),
+                      if (t.reviews > 0) Text('★ ${t.score.toStringAsFixed(2)}  (${t.reviews})', style: const TextStyle(fontWeight: FontWeight.w700)) else const Text('No reviews yet'),
+                      TutorLevelChip(t),
+                    ]),
+                    if (t.levelNo == 1)
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text('New tutor: grades are typed in by the tutor and not checked yet.',
+                            style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, fontStyle: FontStyle.italic)),
+                      ),
+                    if (t.bio.isNotEmpty) Text(t.bio),
+                    if (t.availability.isNotEmpty) Text('Free: ${t.availability}', style: Theme.of(context).textTheme.bodySmall),
+                    const SizedBox(height: 6),
+                    for (final m in t.modules.where((m) => searching || m.gradeChecked))
+                      ListTile(
+                        dense: true,
+                        contentPadding: EdgeInsets.zero,
+                        leading: Icon(m.gradeChecked ? Icons.verified_rounded : Icons.help_outline_rounded,
+                            color: m.gradeChecked ? const Color(0xFF14A44D) : Colors.grey, size: 20),
+                        title: Text('${m.courseCode}${m.courseName == null ? '' : ' · ${m.courseName}'}'),
+                        subtitle: Text('UGX ${fmt.format(m.priceUgx)} per hour'
+                            '${m.grade == null ? '' : m.gradeChecked ? ' · grade ${m.grade} (checked)' : ' · says grade ${m.grade} (not checked)'}'),
+                        trailing: TextButton(
+                          onPressed: () async {
+                            final msg = await _prompt(context, 'Message to ${t.name}', min: 5, hint: 'When are you free? What do you need help with?');
+                            if (msg == null || !context.mounted) return;
+                            await _run(context, () => ref.read(communityProvider).requestTutor(tutorId: t.tutorId, courseCode: m.courseCode, message: msg), ok: 'Request sent');
+                          },
+                          child: const Text('Ask'),
+                        ),
+                      ),
+                    if ((t.contact ?? '').isNotEmpty)
+                      TextButton.icon(
+                          onPressed: () => launchUrl(Uri.parse('https://wa.me/${t.contact!.replaceAll(RegExp(r'[^0-9]'), '')}')),
+                          icon: const Icon(Icons.chat_rounded),
+                          label: const Text('WhatsApp')),
+                  ]),
+                ),
+              ),
+          ]);
+        },
       ),
     );
   }
@@ -609,7 +662,8 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
                   '• be in year 2 or above (set your year in Me → Edit details),\n'
                   '• write at least 40 characters about yourself,\n'
                   '• give the grade you got in each unit you teach.\n'
-                  'Students can report tutors. Your level grows with every lesson students confirm.'),
+                  'You can teach straight away; people find you by name or @username. '
+                  'Send your results slip for a unit to be suggested to every student taking it.'),
             ),
           ),
           const SizedBox(height: 8),
@@ -640,11 +694,14 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
                       ],
                     );
                 ref.invalidate(tutorCardsProvider);
-                if (context.mounted) context.pop();
+                refreshGradeCheckPanel(ref);
+                if (context.mounted) showSnack(context, 'Saved. Now send a results slip for each unit to get suggested.');
               });
             },
             child: const Text('Save'),
           ),
+          const SizedBox(height: 16),
+          const GradeCheckPanel(),
         ]),
       );
 }
@@ -1087,29 +1144,6 @@ class _MemberCard extends StatelessWidget {
   }
 }
 
-
-class _LevelChip extends StatelessWidget {
-  const _LevelChip(this.level, this.lessons);
-  final String level;
-  final int lessons;
-  @override
-  Widget build(BuildContext context) {
-    final c = switch (level) {
-      'Expert' => const Color(0xFF7C3AED),
-      'Experienced' => const Color(0xFF059669),
-      'Rising' => const Color(0xFF0EA5E9),
-      _ => const Color(0xFF64748B),
-    };
-    return Tooltip(
-      message: '$lessons lessons taught and confirmed by students',
-      child: Container(
-        padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 3),
-        decoration: BoxDecoration(color: c.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(20)),
-        child: Text('$level · $lessons lessons', style: TextStyle(color: c, fontWeight: FontWeight.w700, fontSize: 12)),
-      ),
-    );
-  }
-}
 
 /// Lets a student report a tutor they had a lesson with.
 Future<void> reportTutorDialog(BuildContext context, CommunityApi api,

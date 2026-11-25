@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'core/config.dart';
 import 'core/theme.dart';
 import 'data/providers.dart';
+import 'features/community/tutor_checks.dart';
 import 'features/timetable/class_reminders_sync.dart';
 import 'features/announcements/announcements_screen.dart';
 import 'features/auth/login_screen.dart';
@@ -95,6 +96,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/install', builder: (_, __) => const InstallScreen()),
           GoRoute(path: '/notifications', builder: (_, __) => const NotificationsScreen()),
           GoRoute(path: '/tutor-reports', builder: (_, __) => const TutorReportsScreen()),
+          GoRoute(path: '/tutor-checks', builder: (_, __) => const GradeChecksScreen()),
           GoRoute(path: '/insights', builder: (_, __) => const PostInsightsScreen()),
           GoRoute(path: '/dashboard', builder: (_, __) => const AdminDashboardScreen()),
           GoRoute(

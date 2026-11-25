@@ -102,6 +102,8 @@ class ProfileScreen extends ConsumerWidget {
             ),
             const ClassReminderTile(),
             ActionTile(icon: Icons.menu_book_rounded, title: 'My course units', subtitle: 'Notices from your lecturers', color: const Color(0xFFF97316), onTap: () => context.push('/courses')),
+            if (user.isStaff || (ref.watch(teachingUnitsProvider).valueOrNull?.isNotEmpty ?? false))
+              ActionTile(icon: Icons.fact_check_rounded, title: 'Grade checks', subtitle: 'Tutors\' results slips to check', color: const Color(0xFF0095F6), onTap: () => context.push('/tutor-checks')),
             ActionTile(icon: Icons.privacy_tip_rounded, title: 'Privacy policy', subtitle: 'What we keep and why', color: const Color(0xFF0EA5E9), onTap: () => showPolicy(context, 'privacy')),
             ActionTile(icon: Icons.description_rounded, title: 'Terms of use', subtitle: 'Rules everyone agrees to', color: const Color(0xFF475569), onTap: () => showPolicy(context, 'terms')),
             ActionTile(icon: Icons.rule_rounded, title: 'Posting code', subtitle: 'Rules for official posts', color: const Color(0xFF059669), onTap: () => showPolicy(context, 'posting_code')),
