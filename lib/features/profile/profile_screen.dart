@@ -9,6 +9,7 @@ import '../../widgets/common.dart';
 import '../../widgets/section.dart';
 import '../community/policy_gate.dart';
 import '../install/install_screen.dart';
+import '../timetable/class_reminders_sync.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
@@ -99,6 +100,7 @@ class ProfileScreen extends ConsumerWidget {
                 onChanged: (v) => ref.read(dataSaverProvider.notifier).set(v),
               ),
             ),
+            const ClassReminderTile(),
             ActionTile(icon: Icons.menu_book_rounded, title: 'My course units', subtitle: 'Notices from your lecturers', color: const Color(0xFFF97316), onTap: () => context.push('/courses')),
             ActionTile(icon: Icons.privacy_tip_rounded, title: 'Privacy policy', subtitle: 'What we keep and why', color: const Color(0xFF0EA5E9), onTap: () => showPolicy(context, 'privacy')),
             ActionTile(icon: Icons.description_rounded, title: 'Terms of use', subtitle: 'Rules everyone agrees to', color: const Color(0xFF475569), onTap: () => showPolicy(context, 'terms')),

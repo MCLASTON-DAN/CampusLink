@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'core/config.dart';
 import 'core/theme.dart';
 import 'data/providers.dart';
+import 'features/timetable/class_reminders_sync.dart';
 import 'features/announcements/announcements_screen.dart';
 import 'features/auth/login_screen.dart';
 import 'features/buddy/buddy_screen.dart';
@@ -59,7 +60,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       ShellRoute(
         builder: (context, state, child) =>
             NotificationHost(
-                child: PolicyAcceptanceGate(child: AppShell(location: state.matchedLocation, child: child))),
+                child: ClassReminderSync(
+                    child: PolicyAcceptanceGate(child: AppShell(location: state.matchedLocation, child: child)))),
         routes: [
           GoRoute(path: '/home', builder: (_, __) => const HomeScreen()),
           GoRoute(path: '/announcements', builder: (_, __) => const AnnouncementsScreen()),

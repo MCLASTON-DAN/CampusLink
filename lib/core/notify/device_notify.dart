@@ -2,3 +2,4 @@
 // sound. Web: small helpers in web/index.html. Phones and computers: the
 // flutter_local_notifications plugin.
 export 'device_notify_io.dart' if (dart.library.js_interop) 'device_notify_web.dart';
+export 'class_reminders.dart';

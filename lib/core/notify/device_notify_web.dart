@@ -1,5 +1,7 @@
 import 'dart:js_interop';
 
+import 'class_reminders.dart';
+
 @JS('campuslinkNotifyStatus')
 external JSString? _status();
 @JS('campuslinkNotifyAsk')
@@ -33,3 +35,8 @@ Future<void> deviceNotifyShow(String title, String body, {String? link}) async {
     if (p != null) await p.toDart;
   } catch (_) {}
 }
+
+
+/// Browsers cannot fire a reminder while the page is closed.
+bool get deviceCanSchedule => false;
+Future<bool> deviceScheduleClassReminders(List<ClassReminder> list, int oldCount) async => false;

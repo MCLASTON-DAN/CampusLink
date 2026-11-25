@@ -2,6 +2,10 @@ import 'dart:io' show Platform;
 
 import 'package:flutter/foundation.dart';
 import 'package:flutter_local_notifications/flutter_local_notifications.dart';
+import 'package:timezone/data/latest_all.dart' as tzdata;
+import 'package:timezone/timezone.dart' as tz;
+
+import 'class_reminders.dart';
 
 final _plugin = FlutterLocalNotificationsPlugin();
 bool _ready = false;
@@ -89,4 +93,53 @@ Future<void> deviceNotifyShow(String title, String body, {String? link}) async {
     );
     await _plugin.show(_id++, title, body, details, payload: link);
   } catch (_) {}
+}
+
+/// Can this device fire a reminder while the app is closed?
+bool get deviceCanSchedule => _supported && (Platform.isAndroid || Platform.isIOS || Platform.isMacOS);
+
+bool _tzReady = false;
+
+/// Replaces all class reminders with [list]. [oldCount] is how many were set last time.
+Future<bool> deviceScheduleClassReminders(List<ClassReminder> list, int oldCount) async {
+  if (!deviceCanSchedule) return false;
+  try {
+    await _init();
+    if (!_tzReady) {
+      tzdata.initializeTimeZones();
+      _tzReady = true;
+    }
+    // Classes run on Kampala time, wherever the phone is set.
+    final kla = tz.getLocation('Africa/Kampala');
+    for (var i = 0; i < oldCount; i++) {
+      await _plugin.cancel(reminderIdBase + i);
+    }
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails(
+        'campuslink_classes',
+        'Class reminders',
+        channelDescription: 'A heads-up before each class on your timetable',
+        importance: Importance.high,
+        priority: Priority.high,
+        playSound: true,
+      ),
+      iOS: DarwinNotificationDetails(presentSound: true, presentAlert: true, presentBanner: true),
+      macOS: DarwinNotificationDetails(presentSound: true, presentAlert: true, presentBanner: true),
+    );
+    final now = tz.TZDateTime.now(kla);
+    for (final r in list) {
+      var when = tz.TZDateTime(kla, now.year, now.month, now.day, r.hour, r.minute);
+      while (when.weekday != r.weekday || !when.isAfter(now)) {
+        when = when.add(const Duration(days: 1));
+      }
+      await _plugin.zonedSchedule(r.id, r.title, r.body, when, details,
+          // Inexact needs no special permission; it may be a minute or two late.
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle,
+          matchDateTimeComponents: DateTimeComponents.dayOfWeekAndTime,
+          payload: '/timetable');
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
 }
