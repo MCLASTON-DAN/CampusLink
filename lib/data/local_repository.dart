@@ -188,7 +188,22 @@ class LocalRepository implements CampusRepository {
         ..sort((a, b) => a.createdAt.compareTo(b.createdAt)));
 
   @override
+  Future<void> moveRequest(String requestId, String? officeId, String officeName) async {
+    final i = _requests.indexWhere((x) => x.id == requestId);
+    if (i < 0) return;
+    final o = _requests[i];
+    _requests[i] = HelpRequest(
+        id: o.id, studentId: o.studentId, officeId: officeId, title: o.title, description: o.description,
+        priority: o.priority, status: o.status, createdAt: o.createdAt, updatedAt: DateTime.now());
+    _updates.add(RequestUpdate(
+        id: _uuid.v4(), requestId: requestId, authorId: _user?.id, message: 'Sent to $officeName.', createdAt: DateTime.now()));
+  }
+
+  @override
   Future<HelpRequest> createRequest(HelpRequest r) async {
+    // Same id sent twice (double tap, retry) = the same complaint, not a new one.
+    final existing = _requests.where((x) => x.id == r.id).firstOrNull;
+    if (existing != null) return existing;
     _requests.add(r);
     _updates.add(RequestUpdate(
       id: _uuid.v4(),

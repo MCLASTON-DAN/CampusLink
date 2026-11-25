@@ -33,6 +33,10 @@ abstract class CampusRepository {
   Future<List<HelpRequest>> myRequests();
   Future<List<RequestUpdate>> requestUpdates(String requestId);
   Future<HelpRequest> createRequest(HelpRequest r);
+
+  /// Send a request to another office (null = general desk). Staff, or the
+  /// student while it is still open. Adds a line to its timeline.
+  Future<void> moveRequest(String requestId, String? officeId, String officeName);
   Future<void> addRequestUpdate(RequestUpdate u, {RequestStatus? newStatus});
 
   // ---- study ----

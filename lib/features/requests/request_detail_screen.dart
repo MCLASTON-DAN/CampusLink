@@ -44,6 +44,34 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     ref.invalidate(myRequestsProvider);
   }
 
+  Future<void> _move(HelpRequest r, List<HelpOffice> offices) async {
+    final pick = await showModalBottomSheet<HelpOffice>(
+      context: context,
+      showDragHandle: true,
+      isScrollControlled: true,
+      builder: (sheet) => SafeArea(
+        child: ListView(shrinkWrap: true, children: [
+          const ListTile(title: Text('Send this request to', style: TextStyle(fontWeight: FontWeight.w700))),
+          for (final o in offices)
+            ListTile(
+              leading: Icon(o.id == r.officeId ? Icons.check_circle_rounded : Icons.apartment_rounded),
+              title: Text(o.name),
+              subtitle: o.description.isEmpty ? null : Text(o.description, maxLines: 1, overflow: TextOverflow.ellipsis),
+              onTap: () => Navigator.pop(sheet, o),
+            ),
+        ]),
+      ),
+    );
+    if (pick == null || pick.id == r.officeId) return;
+    try {
+      await ref.read(repositoryProvider).moveRequest(r.id, pick.id, pick.name);
+      ref.invalidate(myRequestsProvider);
+      ref.invalidate(requestUpdatesProvider(r.id));
+    } catch (_) {
+      if (mounted) showSnack(context, 'Could not move it. Check your connection and try again.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final requests = ref.watch(myRequestsProvider);
@@ -96,8 +124,18 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             const SizedBox(height: 6),
                             Text(r.description),
                             const SizedBox(height: 10),
-                            Text('${office?.name ?? 'General'} · opened ${friendlyDate(r.createdAt)}',
-                                style: Theme.of(context).textTheme.bodySmall),
+                            Row(children: [
+                              Expanded(
+                                child: Text('${office?.name ?? 'General desk'} · opened ${friendlyDate(r.createdAt)}',
+                                    style: Theme.of(context).textTheme.bodySmall),
+                              ),
+                              if (offices.isNotEmpty && canClose && ((user?.isStaff ?? false) || user?.id == r.studentId))
+                                TextButton.icon(
+                                  onPressed: () => _move(r, offices),
+                                  icon: const Icon(Icons.swap_horiz_rounded, size: 18),
+                                  label: Text(r.officeId == null ? 'Choose office' : 'Change office'),
+                                ),
+                            ]),
                           ],
                         ),
                       ),

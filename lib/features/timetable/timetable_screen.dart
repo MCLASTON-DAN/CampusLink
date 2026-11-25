@@ -8,6 +8,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
 import 'timetable_import.dart';
+import 'timetable_merge.dart';
 import 'timetable_picker.dart';
 
 class TimetableScreen extends ConsumerStatefulWidget {
@@ -36,31 +37,16 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
         showSnack(context, 'No classes found in that file. Check it has a Day column or day headers.');
         return;
       }
-      final entries = await pickTimetableGroups(context, groups,
-          programme: user?.programme, year: user?.yearOfStudy);
+      final entries = await pickTimetableGroups(context, groups, programme: user?.programme, year: user?.yearOfStudy);
       if (entries == null || entries.isEmpty || !mounted) return;
-      final replace = await showDialog<bool>(
-        context: context,
-        builder: (ctx) => AlertDialog(
-          title: Text('Found ${entries.length} classes'),
-          content: Text('Replace your current timetable, or add these to it?'),
-          actions: [
-            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Add')),
-            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Replace')),
-          ],
-        ),
-      );
-      if (replace == null) return;
       final repo = ref.read(repositoryProvider);
-      if (replace) {
-        await repo.replaceTimetable(entries);
-      } else {
-        for (final e in entries) {
-          await repo.addTimetableEntry(e);
-        }
-      }
+      final current = await repo.timetable();
+      if (!mounted) return;
+      final finalList = await reviewTimetableImport(context, current, entries);
+      if (finalList == null) return;
+      await repo.replaceTimetable(finalList);
       ref.invalidate(timetableProvider);
-      if (mounted) showSnack(context, 'Imported ${entries.length} classes from ${f.name}');
+      if (mounted) showSnack(context, 'Timetable saved from ${f.name}');
     } on UnsupportedError catch (e) {
       if (mounted) {
         showDialog(
@@ -160,6 +146,27 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
     ref.invalidate(timetableProvider);
   }
 
+  Future<void> _clearAll() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Clear all classes?'),
+        content: const Text('This removes every class from your timetable and its reminders. You can import again any time.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear all')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    try {
+      await ref.read(repositoryProvider).replaceTimetable([]);
+      ref.invalidate(timetableProvider);
+    } catch (_) {
+      if (mounted) showSnack(context, 'Could not clear. Check your connection and try again.');
+    }
+  }
+
   @override
   Widget build(BuildContext context) {
     final data = ref.watch(timetableProvider);
@@ -167,27 +174,17 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
       appBar: AppBar(
         title: const Text('My timetable'),
         actions: [
+          IconButton(tooltip: 'Refresh', onPressed: () => ref.invalidate(timetableProvider), icon: const Icon(Icons.refresh_rounded)),
           IconButton(tooltip: 'Import CSV / Excel', onPressed: _import, icon: const Icon(Icons.upload_file_rounded)),
-          IconButton(
-            tooltip: 'Clear all',
-            onPressed: () async {
-              final ok = await showDialog<bool>(
-                context: context,
-                builder: (ctx) => AlertDialog(
-                  title: const Text('Clear timetable?'),
-                  content: const Text('This removes all classes. You can import again any time.'),
-                  actions: [
-                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
-                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Clear')),
-                  ],
-                ),
-              );
-              if (ok == true) {
-                await ref.read(repositoryProvider).replaceTimetable([]);
-                ref.invalidate(timetableProvider);
-              }
+          PopupMenuButton<String>(
+            onSelected: (v) {
+              if (v == 'clear') _clearAll();
+              if (v == 'import') _import();
             },
-            icon: const Icon(Icons.delete_sweep_outlined),
+            itemBuilder: (_) => const [
+              PopupMenuItem(value: 'import', child: ListTile(leading: Icon(Icons.upload_file_rounded), title: Text('Import and review'))),
+              PopupMenuItem(value: 'clear', child: ListTile(leading: Icon(Icons.delete_sweep_outlined), title: Text('Clear all classes'))),
+            ],
           ),
         ],
       ),
@@ -204,11 +201,13 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
             return EmptyState(
               icon: Icons.calendar_month_rounded,
               title: 'No classes yet',
-              subtitle: 'Import the official timetable (CSV or Excel) and we will pick out your programme\'s classes, or add them one by one.',
+              subtitle:
+                  'Import the official timetable (CSV or Excel) and we will pick out your programme\'s classes, or add them one by one.',
               action: FilledButton.icon(onPressed: _import, icon: const Icon(Icons.upload_file_rounded), label: const Text('Import file')),
             );
           }
-          final todays = all.where((e) => e.dayOfWeek == _day).toList();
+          final todays = all.where((e) => e.dayOfWeek == _day).toList()..sort((a, b) => a.startTime.compareTo(b.startTime));
+          final clashes = findClashes(all);
           return Column(
             children: [
               Padding(
@@ -234,12 +233,15 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
                                     style: TextStyle(fontSize: 12, fontWeight: FontWeight.w700, color: _day == d ? Colors.white : null)),
                                 const SizedBox(height: 2),
                                 Container(
-                                  width: 6, height: 6,
+                                  width: 6,
+                                  height: 6,
                                   decoration: BoxDecoration(
                                     shape: BoxShape.circle,
-                                    color: all.any((e) => e.dayOfWeek == d)
-                                        ? (_day == d ? Colors.white : Brand.violet)
-                                        : Colors.transparent,
+                                    color: all.any((e) => e.dayOfWeek == d && clashes.containsKey(e.id))
+                                        ? Theme.of(context).colorScheme.error
+                                        : all.any((e) => e.dayOfWeek == d)
+                                            ? (_day == d ? Colors.white : Brand.violet)
+                                            : Colors.transparent,
                                   ),
                                 ),
                               ]),
@@ -253,60 +255,80 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
               Expanded(
                 child: todays.isEmpty
                     ? const EmptyState(icon: Icons.free_breakfast_rounded, title: 'Free day', subtitle: 'No classes scheduled.')
-                    : ListView.separated(
-                        padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
-                        itemCount: todays.length,
-                        separatorBuilder: (_, __) => const SizedBox(height: 10),
-                        itemBuilder: (_, i) {
-                          final e = todays[i];
-                          return Dismissible(
-                            key: ValueKey(e.id),
-                            direction: DismissDirection.endToStart,
-                            background: Container(
-                              alignment: Alignment.centerRight,
-                              padding: const EdgeInsets.only(right: 20),
-                              decoration: BoxDecoration(color: Brand.coral, borderRadius: BorderRadius.circular(20)),
-                              child: const Icon(Icons.delete_rounded, color: Colors.white),
-                            ),
-                            onDismissed: (_) async {
-                              await ref.read(repositoryProvider).deleteTimetableEntry(e.id);
-                              ref.invalidate(timetableProvider);
-                            },
-                            child: Card(
-                              child: Padding(
-                                padding: const EdgeInsets.all(14),
-                                child: Row(
-                                  children: [
-                                    Container(
-                                      width: 64,
-                                      padding: const EdgeInsets.symmetric(vertical: 10),
-                                      decoration: BoxDecoration(color: Brand.teal.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
-                                      child: Column(children: [
-                                        Text(e.startTime, style: const TextStyle(fontWeight: FontWeight.w800, color: Brand.teal)),
-                                        Text(e.endTime, style: Theme.of(context).textTheme.bodySmall),
-                                      ]),
-                                    ),
-                                    const SizedBox(width: 14),
-                                    Expanded(
-                                      child: Column(
-                                        crossAxisAlignment: CrossAxisAlignment.start,
-                                        children: [
-                                          Text(e.courseName ?? e.courseCode, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
-                                          const SizedBox(height: 2),
-                                          Text(
-                                            [e.courseCode, if (e.room != null) e.room!, if (e.lecturer != null) e.lecturer!].join(' · '),
-                                            style: Theme.of(context).textTheme.bodySmall,
-                                          ),
-                                        ],
+                    : RefreshIndicator(
+                        onRefresh: () async {
+                          ref.invalidate(timetableProvider);
+                          await ref.read(timetableProvider.future).catchError((_) => <TimetableEntry>[]);
+                        },
+                        child: ListView.separated(
+                          physics: const AlwaysScrollableScrollPhysics(),
+                          padding: const EdgeInsets.fromLTRB(16, 4, 16, 90),
+                          itemCount: todays.length,
+                          separatorBuilder: (_, __) => const SizedBox(height: 10),
+                          itemBuilder: (_, i) {
+                            final e = todays[i];
+                            return Dismissible(
+                              key: ValueKey(e.id),
+                              direction: DismissDirection.endToStart,
+                              background: Container(
+                                alignment: Alignment.centerRight,
+                                padding: const EdgeInsets.only(right: 20),
+                                decoration: BoxDecoration(color: Brand.coral, borderRadius: BorderRadius.circular(20)),
+                                child: const Icon(Icons.delete_rounded, color: Colors.white),
+                              ),
+                              onDismissed: (_) async {
+                                await ref.read(repositoryProvider).deleteTimetableEntry(e.id);
+                                ref.invalidate(timetableProvider);
+                              },
+                              child: Card(
+                                child: Padding(
+                                  padding: const EdgeInsets.all(14),
+                                  child: Row(
+                                    children: [
+                                      Container(
+                                        width: 64,
+                                        padding: const EdgeInsets.symmetric(vertical: 10),
+                                        decoration: BoxDecoration(
+                                            color: Brand.teal.withValues(alpha: 0.12), borderRadius: BorderRadius.circular(12)),
+                                        child: Column(children: [
+                                          Text(e.startTime, style: const TextStyle(fontWeight: FontWeight.w800, color: Brand.teal)),
+                                          Text(e.endTime, style: Theme.of(context).textTheme.bodySmall),
+                                        ]),
                                       ),
-                                    ),
-                                    if (e.source != 'manual') const Icon(Icons.upload_file_rounded, size: 16, color: Colors.grey),
-                                  ],
+                                      const SizedBox(width: 14),
+                                      Expanded(
+                                        child: Column(
+                                          crossAxisAlignment: CrossAxisAlignment.start,
+                                          children: [
+                                            Text(e.courseName ?? e.courseCode,
+                                                style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 15)),
+                                            const SizedBox(height: 2),
+                                            Text(
+                                              [e.courseCode, if (e.room != null) e.room!, if (e.lecturer != null) e.lecturer!].join(' · '),
+                                              style: Theme.of(context).textTheme.bodySmall,
+                                            ),
+                                            if (clashes[e.id] != null)
+                                              Padding(
+                                                padding: const EdgeInsets.only(top: 4),
+                                                child: Text(
+                                                  '⚠ Clashes with ${clashes[e.id]!.map((x) => '${x.courseCode} ${x.startTime}').join(', ')}',
+                                                  style: TextStyle(
+                                                      color: Theme.of(context).colorScheme.error,
+                                                      fontWeight: FontWeight.w600,
+                                                      fontSize: 12),
+                                                ),
+                                              ),
+                                          ],
+                                        ),
+                                      ),
+                                      if (e.source != 'manual') const Icon(Icons.upload_file_rounded, size: 16, color: Colors.grey),
+                                    ],
+                                  ),
                                 ),
                               ),
-                            ),
-                          );
-                        },
+                            );
+                          },
+                        ),
                       ),
               ),
             ],

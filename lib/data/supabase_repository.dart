@@ -216,19 +216,32 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<HelpRequest> createRequest(HelpRequest r) async {
-    final row = await _client
-        .from('help_requests')
-        .insert(r.toMap()..remove('id')..remove('created_at')..remove('updated_at'))
-        .select()
-        .single();
-    final created = HelpRequest.fromMap(row);
+    // The form makes one id and reuses it on every tap or retry. The database
+    // refuses a second row with that id, so one complaint is always one row.
+    // The first "Request submitted." line is added by the database itself
+    // (trigger in 0013), in the same step, so nothing can be half-saved.
+    try {
+      final row = await _client
+          .from('help_requests')
+          .insert(r.toMap()..remove('created_at')..remove('updated_at'))
+          .select()
+          .single();
+      return HelpRequest.fromMap(row);
+    } on PostgrestException catch (e) {
+      if (e.code != '23505') rethrow; // 23505 = this id is already saved
+      final row = await _client.from('help_requests').select().eq('id', r.id).single();
+      return HelpRequest.fromMap(row);
+    }
+  }
+
+  @override
+  Future<void> moveRequest(String requestId, String? officeId, String officeName) async {
+    await _client.from('help_requests').update({'office_id': officeId}).eq('id', requestId);
     await _client.from('help_request_updates').insert({
-      'request_id': created.id,
+      'request_id': requestId,
       'author_id': _uid,
-      'message': 'Request submitted.',
-      'new_status': 'open',
+      'message': 'Sent to $officeName.',
     });
-    return created;
   }
 
   @override
@@ -386,16 +399,23 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<void> replaceTimetable(List<TimetableEntry> entries) async {
-    await _client.from('timetable_entries').delete().eq('user_id', _uid);
-    if (entries.isEmpty) return;
-    await _client.from('timetable_entries').insert(
-      entries.map((e) => e.toMap()..remove('id')..['user_id'] = _uid).toList(),
-    );
+    // Save first, then remove what was dropped. If the network fails half-way
+    // you get extra classes, never an empty timetable.
+    if (entries.isNotEmpty) {
+      await _client.from('timetable_entries').upsert(
+            entries.map((e) => e.toMap()..['user_id'] = _uid).toList(),
+            onConflict: 'id',
+          );
+    }
+    final keep = entries.map((e) => e.id).toList();
+    var del = _client.from('timetable_entries').delete().eq('user_id', _uid);
+    if (keep.isNotEmpty) del = del.not('id', 'in', '(${keep.join(',')})');
+    await del;
   }
 
   @override
   Future<void> addTimetableEntry(TimetableEntry e) =>
-      _client.from('timetable_entries').insert(e.toMap()..remove('id')..['user_id'] = _uid);
+      _client.from('timetable_entries').insert(e.toMap()..['user_id'] = _uid);
 
   @override
   Future<void> deleteTimetableEntry(String id) =>
