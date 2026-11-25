@@ -1,6 +1,8 @@
 import 'dart:async';
 
 import 'package:flutter/material.dart';
+
+import 'event_rsvp.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:url_launcher/url_launcher.dart';
@@ -194,6 +196,8 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
                     ),
                   ),
                   if (e.isMajor) const Padding(padding: EdgeInsets.only(top: 4), child: StatusChip('Major event · approved by the super admin', color: Colors.amber)),
+                  const SizedBox(height: 8),
+                  EventRsvpPanel(event: e),
                   if ((e.topic ?? '').isNotEmpty) ...[const SizedBox(height: 12), Text('What it is about', style: t.titleSmall), Text(e.topic!)],
                   if ((e.impact ?? '').isNotEmpty) ...[const SizedBox(height: 12), Text('How it helps you', style: t.titleSmall), Text(e.impact!)],
                   if (e.description.isNotEmpty) ...[const SizedBox(height: 12), Text(e.description)],

@@ -54,6 +54,7 @@ void main() {
     'tutor reports': () => const TutorReportsScreen(),
     'privacy': () => const PolicyScreen(doc: privacyPolicy),
     'terms': () => const PolicyScreen(doc: termsOfUse),
+    'event detail': () => const EventDetailScreen(eventId: 'ev-1'),
     'edit office': () => const OfficeEditScreen(officeId: 'off-registrar'),
   };
 

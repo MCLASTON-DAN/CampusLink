@@ -2,6 +2,8 @@
     <!-- Needed to reach the database and pictures in release builds. -->
     <uses-permission android:name="android.permission.INTERNET"/>
     <uses-permission android:name="android.permission.POST_NOTIFICATIONS"/>
+    <uses-permission android:name="android.permission.CAMERA"/>
+    <uses-feature android:name="android.hardware.camera" android:required="false"/>
     <application
         android:label="CampusLink"
         android:name="${applicationName}"
