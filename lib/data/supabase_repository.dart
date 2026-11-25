@@ -353,14 +353,7 @@ class SupabaseRepository implements CampusRepository {
       _client.from('feedback').insert({'topic': topic, 'message': message, 'sentiment': sentiment});
 
   @override
-  Future<List<CampusEvent>> events() async {
-    final rows = await _client
-        .from('events')
-        .select()
-        .gte('starts_at', DateTime.now().subtract(const Duration(days: 1)).toIso8601String())
-        .order('starts_at');
-    return rows.map(CampusEvent.fromMap).toList();
-  }
+  Future<List<CampusEvent>> events() => community.upcomingEvents();
 
   @override
   Future<List<Club>> clubs() async {

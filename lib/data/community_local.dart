@@ -200,7 +200,7 @@ class LocalCommunity implements CommunityApi {
           [...all, if (e.contains('president')) 'manage_members']);
     }
     if (e.contains('press') || e.contains('news')) {
-      add('pub-press', 'Cavendish Campus Newsroom', 'press', 'Campus reporter (demo)', ['news']);
+      add('pub-press', 'Cavendish Campus Newsroom', 'press', 'Campus reporter (demo)', ['news', 'events']);
     }
     _put('members', members);
     _save();
@@ -607,6 +607,14 @@ class LocalCommunity implements CommunityApi {
   Future<CampusEvent?> event(String id) {
     final m = _list('events').where((e) => e['id'] == id).toList();
     return _tick(m.isEmpty ? null : _event(m.first));
+  }
+
+  @override
+  Future<List<CampusEvent>> upcomingEvents() {
+    final from = DateTime.now().subtract(const Duration(days: 1));
+    final list = _list('events').map(_event).where((e) => e.startsAt.isAfter(from)).toList()
+      ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
+    return _tick(list);
   }
 
   @override

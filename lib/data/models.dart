@@ -600,7 +600,8 @@ class CampusEvent {
 
   final String? publisherId;
   final String publisherName;
-  final String publisherKind;
+  /// Office kind (administration, guild, press). Null when unknown: no badge.
+  final String? publisherKind;
   final String? createdBy;
   final String? topic; // what the event is about
   final String? impact; // how students benefit
@@ -624,7 +625,7 @@ class CampusEvent {
     this.organiser,
     this.publisherId,
     this.publisherName = '',
-    this.publisherKind = 'guild',
+    this.publisherKind,
     this.createdBy,
     this.topic,
     this.impact,
@@ -692,7 +693,7 @@ class CampusEvent {
         organiser: m['organiser'],
         publisherId: m['publisher_id'],
         publisherName: m['publisher_name'] ?? (m['organiser'] ?? ''),
-        publisherKind: m['publisher_kind'] ?? 'guild',
+        publisherKind: m['publisher_kind'] as String?,
         createdBy: m['created_by'],
         topic: m['topic'],
         impact: m['impact'],

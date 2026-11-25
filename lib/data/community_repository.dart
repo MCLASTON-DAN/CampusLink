@@ -82,6 +82,9 @@ abstract class CommunityApi {
 
   // ---- events ----
   Future<CampusEvent?> event(String id);
+  /// THE list of events (from yesterday onwards), each with its own office.
+  /// Home, the Events page and search all use this one loader.
+  Future<List<CampusEvent>> upcomingEvents();
   Future<List<CampusEvent>> featuredEvents();
   Future<CampusEvent> createEvent(CampusEvent e);
   /// Super admin only: approved | rejected.

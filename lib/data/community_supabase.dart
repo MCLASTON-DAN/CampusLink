@@ -102,18 +102,29 @@ class SupabaseCommunity implements CommunityApi {
     return rows.map((r) => r['target_id'] as String).toSet();
   }
 
+  /// Every post and event row comes with its own office attached by the
+  /// database, so the app never has to look it up or guess.
+  static const _office = 'office:publishers!publisher_id(id, kind, name)';
+  static const _postSelect = '*, $_office';
+
+  /// Office name and kind for a row: from the row itself. Never guessed.
+  static (String?, String?) _officeOf(Map<String, dynamic> r) {
+    final o = r['office'];
+    if (o is Map) return (o['kind'] as String?, o['name'] as String?);
+    return (null, null);
+  }
+
   Future<List<Post>> _postsFrom(List<Map<String, dynamic>> rows) async {
-    final pubs = await _pubs(rows.map((r) => r['publisher_id'] as String));
     final people = await _people(rows.map((r) => r['author_id'] as String));
     final stats = await _stats(rows.map((r) => r['id'] as String));
     final liked = await _myLikes('post', rows.map((r) => r['id'] as String));
     return rows.map((r) {
-      final pub = pubs[r['publisher_id']];
+      final (kind, name) = _officeOf(r);
       final id = r['id'] as String;
       return Post.fromMap({
         ...r,
-        'publisher_name': pub?.name ?? '',
-        'publisher_kind': pub?.kind ?? 'unknown',
+        'publisher_name': name ?? '',
+        'publisher_kind': kind,
         'author_name': people[r['author_id']]?['full_name'] ?? '',
         'likes': stats[id]?['likes'] ?? 0,
         'comments': stats[id]?['comments'] ?? 0,
@@ -123,11 +134,10 @@ class SupabaseCommunity implements CommunityApi {
   }
 
   Future<List<CampusEvent>> _eventsFrom(List<Map<String, dynamic>> rows) async {
-    final pubs = await _pubs(rows.map((r) => r['publisher_id']).whereType<String>());
     final stats = await _stats(rows.map((r) => r['id'] as String));
     final liked = await _myLikes('event', rows.map((r) => r['id'] as String));
     return rows.map((r) {
-      final pub = pubs[r['publisher_id']];
+      final (kind, name) = _officeOf(r);
       final id = r['id'] as String;
       final speakers = ((r['event_speakers'] as List?) ?? const [])
           .map((s) => {...Map<String, dynamic>.from(s), 'photo_url': _publicUrl(s['photo_path'])})
@@ -135,8 +145,8 @@ class SupabaseCommunity implements CommunityApi {
         ..sort((a, b) => ((a['position'] ?? 0) as int).compareTo((b['position'] ?? 0) as int));
       return CampusEvent.fromMap({
         ...r,
-        'publisher_name': pub?.name ?? (r['organiser'] ?? ''),
-        'publisher_kind': pub?.kind ?? 'unknown',
+        'publisher_name': name ?? (r['organiser'] ?? ''),
+        'publisher_kind': kind,
         'speakers': speakers,
         'likes': stats[id]?['likes'] ?? 0,
         'comments': stats[id]?['comments'] ?? 0,
@@ -247,7 +257,7 @@ class SupabaseCommunity implements CommunityApi {
   // ---------------------------------------------------------------- news
   @override
   Future<List<Post>> posts({String? kind, int limit = 20, DateTime? before}) => _guard(() async {
-        var q = _client.from('posts').select().eq('status', 'published');
+        var q = _client.from('posts').select(_postSelect).eq('status', 'published');
         if (kind != null) q = q.eq('kind', kind);
         if (before != null) q = q.lt('published_at', before.toUtc().toIso8601String());
         final rows = await q.order('published_at', ascending: false).limit(limit);
@@ -256,7 +266,7 @@ class SupabaseCommunity implements CommunityApi {
 
   @override
   Future<Post?> post(String id) => _guard(() async {
-        final row = await _client.from('posts').select().eq('id', id).maybeSingle();
+        final row = await _client.from('posts').select(_postSelect).eq('id', id).maybeSingle();
         if (row == null) return null;
         return (await _postsFrom([Map<String, dynamic>.from(row)])).first;
       });
@@ -290,7 +300,7 @@ class SupabaseCommunity implements CommunityApi {
               if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
               if (correctsPostId != null) 'corrects_post_id': correctsPostId,
             })
-            .select()
+            .select(_postSelect)
             .single();
         return (await _postsFrom([Map<String, dynamic>.from(row)])).first;
       });
@@ -380,13 +390,25 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   // -------------------------------------------------------------- events
-  static const _eventSelect = '*, event_speakers(*)';
+  static const _eventSelect = '*, event_speakers(*), $_office';
 
   @override
   Future<CampusEvent?> event(String id) => _guard(() async {
         final row = await _client.from('events').select(_eventSelect).eq('id', id).maybeSingle();
         if (row == null) return null;
         return (await _eventsFrom([Map<String, dynamic>.from(row)])).first;
+      });
+
+  @override
+  Future<List<CampusEvent>> upcomingEvents() => _guard(() async {
+        final rows = await _client
+            .from('events')
+            .select(_eventSelect)
+            .eq('status', 'published')
+            .gte('starts_at', DateTime.now().subtract(const Duration(days: 1)).toUtc().toIso8601String())
+            .order('starts_at')
+            .limit(100);
+        return _eventsFrom(List<Map<String, dynamic>>.from(rows));
       });
 
   @override

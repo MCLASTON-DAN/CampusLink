@@ -38,7 +38,7 @@ class Publisher {
   String? get badge => badgeForKind(kind);
 
   factory Publisher.fromMap(Map<String, dynamic> m) =>
-      Publisher(id: m['id'], kind: m['kind'] ?? 'guild', name: m['name'] ?? '');
+      Publisher(id: m['id'], kind: m['kind'] ?? 'unknown', name: m['name'] ?? '');
   Map<String, dynamic> toMap() => {'id': id, 'kind': kind, 'name': name};
 }
 
@@ -47,7 +47,8 @@ class Membership {
   final String id;
   final String publisherId;
   final String publisherName;
-  final String publisherKind;
+  /// Office kind (administration, guild, press). Null when unknown: no badge.
+  final String? publisherKind;
   final String userId;
   final String? userName;
   final String positionTitle;
@@ -95,7 +96,7 @@ class Membership {
         id: m['id'],
         publisherId: m['publisher_id'],
         publisherName: m['publisher_name'] ?? '',
-        publisherKind: m['publisher_kind'] ?? 'guild',
+        publisherKind: m['publisher_kind'] as String?,
         userId: m['user_id'] ?? '',
         userName: m['user_name'],
         positionTitle: m['position_title'] ?? '',
@@ -131,7 +132,8 @@ class Post {
   final String id;
   final String publisherId;
   final String publisherName;
-  final String publisherKind;
+  /// Office kind (administration, guild, press). Null when unknown: no badge.
+  final String? publisherKind;
   final String authorId;
   final String authorName;
   final String authorPosition;
@@ -155,7 +157,7 @@ class Post {
     required this.id,
     required this.publisherId,
     this.publisherName = '',
-    this.publisherKind = 'guild',
+    this.publisherKind,
     required this.authorId,
     this.authorName = '',
     this.authorPosition = '',
@@ -220,7 +222,7 @@ class Post {
         id: m['id'],
         publisherId: m['publisher_id'] ?? '',
         publisherName: m['publisher_name'] ?? '',
-        publisherKind: m['publisher_kind'] ?? 'guild',
+        publisherKind: m['publisher_kind'] as String?,
         authorId: m['author_id'] ?? '',
         authorName: m['author_name'] ?? '',
         authorPosition: m['author_position'] ?? '',
@@ -574,7 +576,8 @@ class Survey {
   final String id;
   final String publisherId;
   final String publisherName;
-  final String publisherKind;
+  /// Office kind (administration, guild, press). Null when unknown: no badge.
+  final String? publisherKind;
   final String title;
   final String purpose;
   final DateTime closesAt;
@@ -587,7 +590,7 @@ class Survey {
     required this.id,
     this.publisherId = '',
     this.publisherName = '',
-    this.publisherKind = 'guild',
+    this.publisherKind,
     required this.title,
     required this.purpose,
     required this.closesAt,
@@ -618,7 +621,7 @@ class Survey {
         id: m['id'],
         publisherId: m['publisher_id'] ?? '',
         publisherName: m['publisher_name'] ?? '',
-        publisherKind: m['publisher_kind'] ?? 'guild',
+        publisherKind: m['publisher_kind'] as String?,
         title: m['title'] ?? '',
         purpose: m['purpose'] ?? '',
         closesAt: _dt(m['closes_at']),

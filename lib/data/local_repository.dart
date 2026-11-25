@@ -295,8 +295,7 @@ class LocalRepository implements CampusRepository {
   }
 
   @override
-  Future<List<CampusEvent>> events() =>
-      _tick(List.of(SeedData.events)..sort((a, b) => a.startsAt.compareTo(b.startsAt)));
+  Future<List<CampusEvent>> events() => community.upcomingEvents();
 
   @override
   Future<List<Club>> clubs() => _tick(SeedData.clubs);
