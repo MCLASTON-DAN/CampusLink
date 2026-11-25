@@ -78,7 +78,7 @@ class HomeScreen extends ConsumerWidget {
                     width: 44,
                     height: 44,
                     child: user?.avatarPath != null
-                        ? NetPicture(user!.avatarPath!)
+                        ? NetPicture(user!.avatarPath!, alwaysLoad: true)
                         : Container(
                             color: s.primary.withValues(alpha: 0.12),
                             alignment: Alignment.center,

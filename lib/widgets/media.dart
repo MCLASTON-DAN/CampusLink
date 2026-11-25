@@ -1,7 +1,11 @@
 import 'dart:ui' show ImageFilter;
 import 'dart:convert';
 
+import 'package:cached_network_image/cached_network_image.dart';
+import 'package:flutter/foundation.dart' show kIsWeb;
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:shared_preferences/shared_preferences.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 /// The 11-letter id inside a YouTube link, or null.
@@ -14,17 +18,51 @@ String? youtubeId(String? url) {
 String youtubeThumb(String id) => 'https://i.ytimg.com/vi/$id/hqdefault.jpg';
 
 /// Shows a picture from the web or from a "data:" link (demo mode).
-class NetPicture extends StatelessWidget {
-  const NetPicture(this.url, {super.key, this.fit = BoxFit.cover});
+/// Data saver: when on, pictures from the web wait for a tap.
+final dataSaverProvider = StateNotifierProvider<DataSaverCtrl, bool>((ref) => DataSaverCtrl());
+
+class DataSaverCtrl extends StateNotifier<bool> {
+  DataSaverCtrl() : super(false) {
+    SharedPreferences.getInstance().then((p) {
+      if (mounted) state = p.getBool(_key) ?? false;
+    }).catchError((_) {});
+  }
+  static const _key = 'data_saver';
+  Future<void> set(bool on) async {
+    state = on;
+    try {
+      (await SharedPreferences.getInstance()).setBool(_key, on);
+    } catch (_) {}
+  }
+}
+
+class NetPicture extends ConsumerStatefulWidget {
+  const NetPicture(this.url, {super.key, this.fit = BoxFit.cover, this.alwaysLoad = false, this.hideWhenSaving = false});
   final String url;
   final BoxFit fit;
 
+  /// Full-screen viewer: the person already asked to see it.
+  final bool alwaysLoad;
+
+  /// A decoration (the blurred backdrop): with data saver on, draw nothing.
+  final bool hideWhenSaving;
+
+  @override
+  ConsumerState<NetPicture> createState() => _NetPictureState();
+}
+
+class _NetPictureState extends ConsumerState<NetPicture> {
+  bool _tapped = false;
+
   @override
   Widget build(BuildContext context) {
+    final url = widget.url;
+    final fit = widget.fit;
+    final s = Theme.of(context).colorScheme;
     final fallback = Container(
-      color: Theme.of(context).colorScheme.surfaceContainerHighest,
+      color: s.surfaceContainerHighest,
       alignment: Alignment.center,
-      child: Icon(Icons.image_outlined, color: Theme.of(context).colorScheme.outline),
+      child: Icon(Icons.image_outlined, color: s.outline),
     );
     if (url.startsWith('data:')) {
       try {
@@ -33,15 +71,41 @@ class NetPicture extends StatelessWidget {
         return fallback;
       }
     }
-    return Image.network(
-      url,
+    final saver = ref.watch(dataSaverProvider);
+    if (saver && widget.hideWhenSaving) return const SizedBox.shrink();
+    if (saver && !_tapped && !widget.alwaysLoad) {
+      return GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: () => setState(() => _tapped = true),
+        child: Container(
+          color: s.surfaceContainerHighest,
+          alignment: Alignment.center,
+          child: Column(mainAxisSize: MainAxisSize.min, children: [
+            Icon(Icons.download_rounded, color: s.outline),
+            const SizedBox(height: 4),
+            Text('Data saver · tap to load picture', style: Theme.of(context).textTheme.labelSmall),
+          ]),
+        ),
+      );
+    }
+    final loading = Container(color: s.surfaceContainerHighest);
+    if (kIsWeb) {
+      // The browser keeps its own copy of pictures.
+      return Image.network(
+        url,
+        fit: fit,
+        // If the picture's server blocks the faster web renderer, still show it.
+        webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
+        errorBuilder: (_, __, ___) => fallback,
+        loadingBuilder: (c, child, p) => p == null ? child : loading,
+      );
+    }
+    // Phones and computers: keep a copy on disk so a picture downloads once.
+    return CachedNetworkImage(
+      imageUrl: url,
       fit: fit,
-      // If the picture's server blocks the faster web renderer, still show it.
-      webHtmlElementStrategy: WebHtmlElementStrategy.fallback,
-      errorBuilder: (_, __, ___) => fallback,
-      loadingBuilder: (c, child, p) => p == null
-          ? child
-          : Container(color: Theme.of(context).colorScheme.surfaceContainerHighest),
+      placeholder: (_, __) => loading,
+      errorWidget: (_, __, ___) => fallback,
     );
   }
 }
@@ -95,7 +159,7 @@ class MediaBanner extends StatelessWidget {
           // text are never cut off.
           ImageFiltered(
             imageFilter: ImageFilter.blur(sigmaX: 18, sigmaY: 18),
-            child: Opacity(opacity: 0.55, child: NetPicture(pic)),
+            child: Opacity(opacity: 0.55, child: NetPicture(pic, hideWhenSaving: true)),
           ),
           NetPicture(pic, fit: BoxFit.contain),
           if (id != null)
@@ -229,7 +293,7 @@ class _PictureViewerState extends State<_PictureViewer> {
               minScale: 1,
               maxScale: 5,
               onInteractionEnd: (_) => setState(() {}),
-              child: SizedBox.expand(child: NetPicture(widget.url, fit: BoxFit.contain)),
+              child: SizedBox.expand(child: NetPicture(widget.url, fit: BoxFit.contain, alwaysLoad: true)),
             ),
           ),
         ),

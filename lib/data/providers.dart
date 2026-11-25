@@ -1,5 +1,7 @@
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import 'offline_cache.dart';
+
 import 'community_models.dart';
 import 'community_repository.dart';
 import 'models.dart';
@@ -8,6 +10,45 @@ import 'smart_search.dart';
 
 /// Overridden in main() with the chosen backend.
 final repositoryProvider = Provider<CampusRepository>((ref) => throw UnimplementedError());
+
+/// Null in tests and demo: then nothing is cached.
+final offlineCacheProvider = Provider<OfflineCache?>((ref) => null);
+
+/// Lists currently shown from the saved copy, with when that copy was saved.
+/// Empty means everything on screen is fresh.
+final offlineSinceProvider = StateProvider<Map<String, DateTime>>((ref) => const {});
+
+/// Load fresh data; save a copy; if loading fails, show the saved copy.
+Future<List<T>> _cached<T>(
+  Ref ref,
+  String key,
+  Future<List<T>> Function() fetch,
+  Map<String, dynamic> Function(T) toMap,
+  T Function(Map<String, dynamic>) fromMap,
+) async {
+  final cache = ref.watch(offlineCacheProvider);
+  final who = ref.watch(_whoProvider);
+  void mark(DateTime? at) {
+    final n = ref.read(offlineSinceProvider.notifier);
+    final next = {...n.state};
+    at == null ? next.remove(key) : next[key] = at;
+    if (next.length != n.state.length || next[key] != n.state[key]) n.state = next;
+  }
+
+  try {
+    final fresh = await fetch();
+    if (cache != null && who != null) {
+      await cache.save(who, key, [for (final x in fresh) toMap(x)]);
+      mark(null);
+    }
+    return fresh;
+  } catch (_) {
+    final saved = (cache != null && who != null) ? cache.load(who, key) : null;
+    if (saved == null) rethrow;
+    mark(saved.$2);
+    return [for (final r in saved.$1) fromMap(r)];
+  }
+}
 
 final isDemoModeProvider = Provider<bool>((ref) => true);
 
@@ -30,8 +71,8 @@ CommunityApi _com(Ref ref) {
   return ref.watch(communityProvider);
 }
 
-final announcementsProvider =
-    FutureProvider.autoDispose((ref) => _repo(ref).announcements());
+final announcementsProvider = FutureProvider.autoDispose((ref) => _cached(
+    ref, 'announcements', () => _repo(ref).announcements(), (a) => a.toMap(), Announcement.fromMap));
 
 final officesProvider = FutureProvider((ref) => _repo(ref).offices());
 
@@ -53,12 +94,13 @@ final buddyPairProvider =
 
 final mentorsProvider = FutureProvider.autoDispose((ref) => _repo(ref).mentors());
 
-final eventsProvider = FutureProvider.autoDispose((ref) => _repo(ref).events());
+final eventsProvider = FutureProvider.autoDispose(
+    (ref) => _cached(ref, 'events', () => _repo(ref).events(), _eventToCache, CampusEvent.fromMap));
 
 final clubsProvider = FutureProvider.autoDispose((ref) => _repo(ref).clubs());
 
-final timetableProvider =
-    FutureProvider.autoDispose((ref) => _repo(ref).timetable());
+final timetableProvider = FutureProvider.autoDispose((ref) => _cached(
+    ref, 'timetable', () => _repo(ref).timetable(), (t) => t.toMap(), TimetableEntry.fromMap));
 
 /// "Where do I go?" – searches offices, announcements, events, groups, clubs.
 final smartSearchProvider =
@@ -85,11 +127,11 @@ final smartSearchProvider =
 // ---- community ----
 final communityProvider = Provider<CommunityApi>((ref) => ref.watch(repositoryProvider).community);
 
-final postsProvider = FutureProvider.autoDispose.family<List<Post>, String?>(
-    (ref, kind) => _com(ref).posts(kind: kind));
+final postsProvider = FutureProvider.autoDispose.family<List<Post>, String?>((ref, kind) => _cached(
+    ref, 'posts:${kind ?? 'all'}', () => _com(ref).posts(kind: kind), _postToCache, Post.fromMap));
 
-final featuredEventsProvider =
-    FutureProvider.autoDispose((ref) => _com(ref).featuredEvents());
+final featuredEventsProvider = FutureProvider.autoDispose((ref) => _cached(
+    ref, 'featured', () => _com(ref).featuredEvents(), _eventToCache, CampusEvent.fromMap));
 
 final myMembershipsProvider = FutureProvider.autoDispose((ref) async {
   ref.watch(currentUserProvider);
@@ -118,14 +160,30 @@ final teachingUnitsProvider = FutureProvider.autoDispose((ref) {
   ref.watch(currentUserProvider);
   return _com(ref).myTeachingUnits();
 });
-final courseNoticesProvider = FutureProvider.autoDispose((ref) => _com(ref).courseNotices());
+final courseNoticesProvider = FutureProvider.autoDispose((ref) => _cached(
+    ref, 'course_notices', () => _com(ref).courseNotices(), (n) => n.toMap(), CourseNotice.fromMap));
 final courseLecturersProvider = FutureProvider.autoDispose((ref) => _com(ref).courseLecturers());
 final tutorReportSummaryProvider =
     FutureProvider.autoDispose((ref) => _com(ref).tutorReportSummary());
 
 final notificationsProvider = FutureProvider.autoDispose((ref) {
   ref.watch(currentUserProvider);
-  return _com(ref).notifications();
+  return _cached(ref, 'notifications', () => _com(ref).notifications(), (n) => n.toMap(), AppNotification.fromMap);
 });
+
+// Counts are not part of toMap (the database computes them), so keep them in the copy.
+Map<String, dynamic> _postToCache(Post p) =>
+    {...p.toMap(), 'likes': p.likes, 'comments': p.comments, 'liked_by_me': p.likedByMe};
+Map<String, dynamic> _eventToCache(CampusEvent e) =>
+    {...e.toMap(), 'likes': e.likes, 'comments': e.comments, 'liked_by_me': e.likedByMe};
+
+/// The lists the "Try again" button reloads.
+void retryOffline(WidgetRef ref) {
+  for (final p in [announcementsProvider, eventsProvider, timetableProvider, featuredEventsProvider,
+      courseNoticesProvider, notificationsProvider]) {
+    ref.invalidate(p);
+  }
+  ref.invalidate(postsProvider);
+}
 final unreadNotificationsProvider = Provider.autoDispose<int>(
     (ref) => ref.watch(notificationsProvider).valueOrNull?.where((n) => !n.read).length ?? 0);

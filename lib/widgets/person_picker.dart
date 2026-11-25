@@ -20,7 +20,7 @@ class PersonAvatar extends StatelessWidget {
       child: SizedBox.square(
         dimension: size,
         child: url != null && url!.isNotEmpty
-            ? NetPicture(url!)
+            ? NetPicture(url!, alwaysLoad: true)
             : Container(
                 color: s.primary.withValues(alpha: 0.12),
                 alignment: Alignment.center,

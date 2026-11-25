@@ -6,6 +6,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'app.dart';
 import 'core/config.dart';
 import 'data/local_repository.dart';
+import 'data/offline_cache.dart';
 import 'data/providers.dart';
 import 'data/repository.dart';
 import 'data/supabase_repository.dart';
@@ -23,7 +24,7 @@ Future<void> main() async {
         url: AppConfig.supabaseUrl,
         publishableKey: AppConfig.supabaseAnonKey,
       );
-      final live = SupabaseRepository(Supabase.instance.client);
+      final live = SupabaseRepository(Supabase.instance.client, cache: OfflineCache(prefs));
       await live.ready; // know who is signed in before the first screen
       repo = live;
       demo = false;
@@ -40,6 +41,7 @@ Future<void> main() async {
       overrides: [
         repositoryProvider.overrideWithValue(repo),
         isDemoModeProvider.overrideWithValue(demo),
+        if (!demo) offlineCacheProvider.overrideWithValue(OfflineCache(prefs)),
       ],
       child: const CampusLinkApp(),
     ),

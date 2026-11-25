@@ -65,6 +65,7 @@ class AppShell extends ConsumerWidget {
             ),
           ),
         Expanded(child: child),
+        const OfflineBanner(),
       ],
     );
 
@@ -111,6 +112,39 @@ class AppShell extends ConsumerWidget {
           for (final d in _dests)
             NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.selectedIcon), label: d.label),
         ],
+      ),
+    );
+  }
+}
+
+
+/// Shows when any list on screen is the saved copy, not fresh data.
+class OfflineBanner extends ConsumerWidget {
+  const OfflineBanner({super.key});
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final since = ref.watch(offlineSinceProvider);
+    if (since.isEmpty) return const SizedBox.shrink();
+    final oldest = since.values.reduce((a, b) => a.isBefore(b) ? a : b);
+    final mins = DateTime.now().difference(oldest).inMinutes;
+    final age = mins < 1 ? 'just now' : mins < 60 ? '$mins min ago' : mins < 1440 ? '${mins ~/ 60} h ago' : '${mins ~/ 1440} days ago';
+    final s = Theme.of(context).colorScheme;
+    return Material(
+      color: s.inverseSurface,
+      child: Padding(
+        padding: const EdgeInsets.fromLTRB(14, 4, 4, 4),
+        child: Row(children: [
+          Icon(Icons.cloud_off_rounded, size: 18, color: s.onInverseSurface),
+          const SizedBox(width: 10),
+          Expanded(
+            child: Text('Offline · showing what you saw $age',
+                style: Theme.of(context).textTheme.bodySmall?.copyWith(color: s.onInverseSurface, fontWeight: FontWeight.w600)),
+          ),
+          TextButton(
+            onPressed: () => retryOffline(ref),
+            child: Text('Try again', style: TextStyle(color: s.inversePrimary)),
+          ),
+        ]),
       ),
     );
   }

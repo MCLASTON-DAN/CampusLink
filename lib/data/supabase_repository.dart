@@ -8,11 +8,12 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'community_repository.dart';
 import 'community_supabase.dart';
 import 'models.dart';
+import 'offline_cache.dart';
 import 'repository.dart';
 
 /// Live backend. Table/column names match supabase/migrations/0001_*.sql.
 class SupabaseRepository implements CampusRepository {
-  SupabaseRepository(this._client) {
+  SupabaseRepository(this._client, {OfflineCache? cache}) : _cache = cache {
     community = SupabaseCommunity(_client, () => _user);
     _client.auth.onAuthStateChange.listen((s) {
       // Token refreshes don't change who is signed in: skip the extra reload.
@@ -42,6 +43,7 @@ class SupabaseRepository implements CampusRepository {
   }
 
   final SupabaseClient _client;
+  final OfflineCache? _cache;
   @override
   late final CommunityApi community;
   final _userCtrl = StreamController<Profile?>.broadcast();
@@ -64,12 +66,19 @@ class SupabaseRepository implements CampusRepository {
           .select('badge, office_title, office_name')
           .eq('id', u.id)
           .maybeSingle();
-      _user = row == null
-          ? Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '')
-          : Profile.fromMap({...row, if (pub != null) ...pub});
+      if (row == null) {
+        _user = Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '');
+      } else {
+        final merged = {...row, if (pub != null) ...pub};
+        _user = Profile.fromMap(merged);
+        await _cache?.save(u.id, 'profile', [Map<String, dynamic>.from(jsonDecode(jsonEncode(merged)) as Map)]);
+      }
     } catch (_) {
-      // Offline for a moment: stay signed in with what we know.
-      _user ??= Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '');
+      // Offline: stay signed in as who we last saw (name, photo, badge), not a blank student.
+      final saved = _cache?.load(u.id, 'profile');
+      _user ??= saved != null && saved.$1.isNotEmpty
+          ? Profile.fromMap(saved.$1.first)
+          : Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '');
     }
     _userCtrl.add(_user);
   }
@@ -120,7 +129,10 @@ class SupabaseRepository implements CampusRepository {
   }
 
   @override
-  Future<void> signOut() => _client.auth.signOut();
+  Future<void> signOut() async {
+    _cache?.clear(); // a shared phone must not show your saved data to the next person
+    await _client.auth.signOut();
+  }
 
   @override
   Future<void> signInWithGoogle() async {

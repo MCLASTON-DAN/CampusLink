@@ -90,6 +90,15 @@ class ProfileScreen extends ConsumerWidget {
             ActionTile(icon: Icons.support_agent_rounded, title: 'My help requests', subtitle: 'Track what you asked', color: const Color(0xFFF97316), onTap: () => context.push('/requests')),
             ActionTile(icon: Icons.gavel_rounded, title: 'Public record', subtitle: 'Removals and office changes, with reasons', color: const Color(0xFF64748B), onTap: () => context.push('/moderation')),
             ActionTile(icon: Icons.notifications_rounded, title: 'Notifications', subtitle: 'Inbox and pop-up settings', color: const Color(0xFFDB2777), onTap: () => context.push('/notifications')),
+            Card(
+              child: SwitchListTile(
+                secondary: const Icon(Icons.data_saver_on_rounded),
+                title: const Text('Data saver'),
+                subtitle: const Text('Pictures load only when you tap them. Good on mobile data.'),
+                value: ref.watch(dataSaverProvider),
+                onChanged: (v) => ref.read(dataSaverProvider.notifier).set(v),
+              ),
+            ),
             ActionTile(icon: Icons.menu_book_rounded, title: 'My course units', subtitle: 'Notices from your lecturers', color: const Color(0xFFF97316), onTap: () => context.push('/courses')),
             ActionTile(icon: Icons.privacy_tip_rounded, title: 'Privacy policy', subtitle: 'What we keep and why', color: const Color(0xFF0EA5E9), onTap: () => showPolicy(context, 'privacy')),
             ActionTile(icon: Icons.description_rounded, title: 'Terms of use', subtitle: 'Rules everyone agrees to', color: const Color(0xFF475569), onTap: () => showPolicy(context, 'terms')),
@@ -346,7 +355,7 @@ class _ProfileHeader extends ConsumerWidget {
                           child: Text(user.fullName.isEmpty ? '?' : user.fullName[0].toUpperCase(),
                               style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
                         )
-                      : NetPicture(user.avatarPath!),
+                      : NetPicture(user.avatarPath!, alwaysLoad: true),
                 ),
               ),
               Positioned(
