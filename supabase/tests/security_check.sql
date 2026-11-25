@@ -27,6 +27,14 @@ begin
   out := out || case when n > 0 then ' | SEES OTHERS NOTIFICATIONS (BAD)' else ' | notifications private' end;
   select count(*) into n from public.timetable_entries where user_id <> stu;
   out := out || case when n > 0 then ' | SEES OTHERS TIMETABLES (BAD)' else ' | timetables private' end;
+  begin perform public.event_check_in((select id from public.events limit 1), 'AAAAAA'); out := out || ' | STUDENT CHECK-IN (BAD)';
+  exception when others then out := out || ' | student check-in blocked'; end;
+  begin perform * from public.post_answers limit 1; out := out || ' | READS VOTES (BAD)';
+  exception when others then out := out || ' | votes private'; end;
+  select count(*) into n from public.post_questions q join public.posts p on p.id = q.post_id where p.author_id <> stu;
+  out := out || case when n > 0 then ' | SEES QUIZ ANSWERS (BAD)' else ' | quiz answers hidden' end;
+  select count(*) into n from public.event_rsvps where user_id <> stu;
+  out := out || case when n > 0 then ' | SEES OTHERS TICKETS (BAD)' else ' | tickets private' end;
   begin update public.profiles set status_text = 'test' where id = stu; out := out || ' | normal edit OK';
   exception when others then out := out || ' | NORMAL EDIT BROKEN'; end;
   reset role;
