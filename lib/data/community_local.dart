@@ -1412,6 +1412,9 @@ class LocalCommunity implements CommunityApi {
   Future<void> addPostQuestions(String postId, List<PostQuestion> questions) async {
     final post = _list('posts').where((p) => p['id'] == postId).firstOrNull;
     if (post == null || post['author_id'] != _me.id) throw CommunityException('Only the author can add questions');
+    if (questions.length > 5) throw CommunityException('At most 5 questions per post');
+    final bad = questions.map((q) => q.problem).whereType<String>().firstOrNull;
+    if (bad != null) throw CommunityException(bad);
     _put('postQuestions', [
       ..._list('postQuestions'),
       for (final q in questions)
@@ -1420,7 +1423,7 @@ class LocalCommunity implements CommunityApi {
           'post_id': postId,
           'kind': q.kind,
           'prompt': q.prompt.trim(),
-          'options': q.options,
+          'options': q.options.map((o) => o.trim()).toList(),
           'correct_index': q.isQuiz ? q.correctIndex : null,
         }
     ]);

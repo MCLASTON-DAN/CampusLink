@@ -1056,6 +1056,9 @@ class SupabaseCommunity implements CommunityApi {
   @override
   Future<void> addPostQuestions(String postId, List<PostQuestion> questions) => _guard(() async {
         if (questions.isEmpty) return;
+        if (questions.length > 5) throw CommunityException('At most 5 questions per post');
+        final bad = questions.map((q) => q.problem).whereType<String>().firstOrNull;
+        if (bad != null) throw CommunityException(bad);
         await _client.from('post_questions').insert([
           for (var i = 0; i < questions.length; i++)
             {

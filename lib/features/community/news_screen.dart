@@ -14,6 +14,7 @@ import '../../widgets/common.dart';
 import '../../widgets/media.dart';
 import '../../core/image_tools.dart';
 import 'policy_gate.dart';
+import 'post_questions.dart';
 import '../../core/config.dart';
 
 const _filters = <String?, String>{
@@ -297,6 +298,7 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
                       subtitle: Text(p.sourceNote.isEmpty ? 'No source given' : p.sourceNote),
                     ),
                   ),
+                  PostQuestionsSection(postId: p.id),
                   if (p.videoUrl != null && p.videoUrl!.isNotEmpty)
                     OutlinedButton.icon(
                         onPressed: () => launchUrl(Uri.parse(p.videoUrl!)),
@@ -514,6 +516,18 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
   bool _busy = false;
   bool _uploading = false;
   String? _cover;
+  final _questions = <DraftQuestion>[];
+
+  /// Set once the post itself is saved, so a retry only resends the questions.
+  String? _createdId;
+
+  @override
+  void dispose() {
+    for (final q in _questions) {
+      q.dispose();
+    }
+    super.dispose();
+  }
 
   Future<void> _pickCover() async {
     setState(() => _uploading = true);
@@ -619,6 +633,8 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
           TextField(controller: _video, decoration: const InputDecoration(labelText: 'YouTube link (optional)')),
         if (_kind == 'meeting_link')
           TextField(controller: _meeting, decoration: const InputDecoration(labelText: 'Meeting link')),
+        const SizedBox(height: 12),
+        QuestionsEditor(drafts: _questions, locked: _createdId != null),
         const SizedBox(height: 8),
         CheckboxListTile(
           contentPadding: EdgeInsets.zero,
@@ -629,7 +645,7 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
         TextButton(onPressed: () => showPolicy(context, 'posting_code'), child: const Text('Read the posting code')),
         FilledButton(
           onPressed: _busy || !_pledge ? null : _submit,
-          child: _busy ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)) : const Text('Publish'),
+          child: _busy ? const SizedBox(height: 18, width: 18, child: CircularProgressIndicator(strokeWidth: 2)) : Text(_createdId == null ? 'Publish' : 'Save the questions again'),
         ),
       ]),
     );
@@ -649,21 +665,48 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
       showSnack(context, 'Videos must be YouTube links.');
       return;
     }
+    // Check the questions first, with the database's own rules, so we never
+    // publish a post and then find its questions are refused.
+    final qs = [for (final d in _questions) d.toQuestion()];
+    for (var i = 0; i < qs.length; i++) {
+      final bad = qs[i].problem;
+      if (bad != null) {
+        showSnack(context, 'Question ${i + 1}: $bad');
+        return;
+      }
+    }
     setState(() => _busy = true);
+    final api = ref.read(communityProvider);
     try {
-      await ref.read(communityProvider).createPost(
-            publisherId: _mem!.publisherId,
-            kind: _kind,
-            title: _title.text,
-            body: _body.text,
-            sourceNote: _source.text,
-            videoUrl: v,
-            meetingUrl: _meeting.text.trim(),
-            coverPath: _cover,
-          );
+      _createdId ??= (await api.createPost(
+        publisherId: _mem!.publisherId,
+        kind: _kind,
+        title: _title.text,
+        body: _body.text,
+        sourceNote: _source.text,
+        videoUrl: v,
+        meetingUrl: _meeting.text.trim(),
+        coverPath: _cover,
+      ))
+          .id;
+      if (qs.isNotEmpty) await api.addPostQuestions(_createdId!, qs);
       if (mounted) context.pop();
     } on CommunityException catch (e) {
-      if (mounted) showSnack(context, e.message);
+      if (mounted) {
+        showSnack(
+            context,
+            _createdId == null
+                ? e.message
+                : 'Your post is live, but the questions did not save (${e.message}). Tap Publish to try the questions again.');
+      }
+    } catch (_) {
+      if (mounted) {
+        showSnack(
+            context,
+            _createdId == null
+                ? 'Could not publish. Check your connection and try again.'
+                : 'Your post is live, but the questions did not save. Tap Publish to try them again.');
+      }
     }
     if (mounted) setState(() => _busy = false);
   }

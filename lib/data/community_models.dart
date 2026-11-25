@@ -891,6 +891,20 @@ class PostQuestion {
   final int total;
   bool get isQuiz => kind == 'quiz';
   bool get answered => myAnswer != null;
+
+  /// The same rules the database enforces. Null means it is fine.
+  String? get problem {
+    final p = prompt.trim();
+    final opts = options.map((o) => o.trim()).toList();
+    if (p.length < 3 || p.length > 200) return 'Each question needs 3 to 200 letters.';
+    if (opts.length < 2 || opts.length > 6) return 'Give 2 to 6 answer choices.';
+    if (opts.any((o) => o.isEmpty)) return 'Fill in every answer choice, or remove the empty one.';
+    if (opts.toSet().length != opts.length) return 'Two answer choices are the same.';
+    if (isQuiz && (correctIndex == null || correctIndex! < 0 || correctIndex! >= opts.length)) {
+      return 'Pick the right answer for each quiz question.';
+    }
+    return null;
+  }
   factory PostQuestion.fromMap(Map<String, dynamic> m) => PostQuestion(
         id: m['id'],
         kind: m['kind'],
