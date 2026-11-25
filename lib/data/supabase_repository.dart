@@ -2,8 +2,9 @@ import 'dart:async';
 import 'dart:convert';
 
 import 'package:crypto/crypto.dart';
-import 'package:flutter/foundation.dart' show kIsWeb;
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:supabase_flutter/supabase_flutter.dart';
+import 'package:url_launcher/url_launcher.dart';
 
 import 'community_repository.dart';
 import 'community_supabase.dart';
@@ -136,13 +137,31 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<void> signInWithGoogle() async {
-    await _client.auth.signInWithOAuth(
-      OAuthProvider.google,
-      // Web: come back to this same site. Phones: reopen the app.
-      redirectTo: kIsWeb ? '${Uri.base.origin}/' : 'ug.ac.cavendish.campuslink://login-callback',
-      authScreenLaunchMode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+    final phone = !kIsWeb && (defaultTargetPlatform == TargetPlatform.android || defaultTargetPlatform == TargetPlatform.iOS);
+    if (!phone) {
+      // Website: Google opens in this same tab and comes back to it.
+      await _client.auth.signInWithOAuth(
+        OAuthProvider.google,
+        redirectTo: kIsWeb ? '${Uri.base.origin}/' : 'ug.ac.cavendish.campuslink://login-callback',
+        authScreenLaunchMode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+      );
+      return;
+    }
+    // Phones: open Google in a sign-in sheet that belongs to the app (Custom
+    // Tab / Safari view), not the phone's browser. When Google sends us back,
+    // the sheet closes, so no leftover browser tabs pile up.
+    final res = await _client.auth.getOAuthSignInUrl(
+      provider: OAuthProvider.google,
+      redirectTo: 'ug.ac.cavendish.campuslink://login-callback',
     );
+    _closeSheetOnReturn ??= _client.auth.onAuthStateChange.listen((e) {
+      if (e.event == AuthChangeEvent.signedIn) closeInAppWebView().catchError((_) {});
+    });
+    final ok = await launchUrl(Uri.parse(res.url), mode: LaunchMode.inAppBrowserView);
+    if (!ok) await launchUrl(Uri.parse(res.url), mode: LaunchMode.externalApplication);
   }
+
+  StreamSubscription<AuthState>? _closeSheetOnReturn;
 
   @override
   Future<Profile> updateProfile(Profile p) async {
