@@ -1274,4 +1274,156 @@ class LocalCommunity implements CommunityApi {
     _put('reports', r);
     await _save();
   }
+
+  // ------------------------------------------------------------ dashboard
+  @override
+  Future<void> touchActivity() async {
+    final days = Map<String, dynamic>.from(_s['activity'] as Map? ?? {});
+    final today = DateTime.now().toIso8601String().substring(0, 10);
+    days[today] = {...List<String>.from(days[today] ?? const []), _me.id}.toList();
+    _s['activity'] = days;
+    await _save();
+  }
+
+  @override
+  Future<AdminOverview> adminOverview() async {
+    if (!_me.isStaff) throw CommunityException('Only staff can see the dashboard');
+    final days = Map<String, dynamic>.from(_s['activity'] as Map? ?? {});
+    final now = DateTime.now();
+    final series = [
+      for (var i = 13; i >= 0; i--)
+        () {
+          final d = now.subtract(Duration(days: i)).toIso8601String().substring(0, 10);
+          return {'day': d, 'n': (days[d] as List? ?? const []).length};
+        }(),
+    ];
+    final insights = await postInsights(days: 7);
+    return _tick(AdminOverview({
+      'users_total': 1,
+      'users_new_7d': 1,
+      'active_today': series.last['n'],
+      'active_7d': {
+        for (var i = 0; i < 7; i++) ...List<String>.from(days[now.subtract(Duration(days: i)).toIso8601String().substring(0, 10)] ?? const []),
+      }.length,
+      'daily_active': series,
+      'posts_7d': insights.length,
+      'views_7d': insights.fold<int>(0, (a, b) => a + b.views),
+      'top_posts': [for (final p in insights.take(5)) {'id': p.postId, 'title': p.title, 'views': p.views}],
+      'open_reports': _list('reports').where((r) => r['status'] == 'open').length,
+      'open_tutor_reports': _list('tutorReports').where((r) => r['status'] == 'open').length,
+      'major_requests': _list('events').where((e) => e['major_status'] == 'requested').length,
+      'pending_claims': _list('claims').where((c) => c['status'] == 'pending').length,
+      'open_help': 0,
+      'terms_ending_14d': _list('members').map(Membership.fromMap).where((m) => m.isActive && m.daysLeft <= 14).length,
+      'upcoming_events': _list('events').where((e) => DateTime.parse(e['starts_at']).isAfter(now)).length,
+    }));
+  }
+
+  // ------------------------------------------------------------ RSVP
+  @override
+  Future<Rsvp?> myRsvp(String eventId) async {
+    final r = _list('rsvps').where((x) => x['event_id'] == eventId && x['user_id'] == _me.id);
+    return _tick(r.isEmpty ? null : Rsvp.fromMap(r.first));
+  }
+
+  @override
+  Future<Rsvp> rsvp(String eventId) async {
+    final existing = await myRsvp(eventId);
+    if (existing != null) return existing;
+    final code = _uuid.v4().replaceAll('-', '').substring(0, 6).toUpperCase();
+    final row = {'event_id': eventId, 'user_id': _me.id, 'name': _me.fullName, 'code': code, 'checked_in_at': null};
+    _put('rsvps', [..._list('rsvps'), row]);
+    await _save();
+    return Rsvp.fromMap(row);
+  }
+
+  @override
+  Future<void> cancelRsvp(String eventId) async {
+    _put('rsvps', _list('rsvps')..removeWhere((x) => x['event_id'] == eventId && x['user_id'] == _me.id && x['checked_in_at'] == null));
+    await _save();
+  }
+
+  @override
+  Future<Map<String, (int, int)>> rsvpCounts(List<String> eventIds) async {
+    final out = <String, (int, int)>{};
+    for (final id in eventIds) {
+      final r = _list('rsvps').where((x) => x['event_id'] == id).toList();
+      if (r.isNotEmpty) out[id] = (r.length, r.where((x) => x['checked_in_at'] != null).length);
+    }
+    return _tick(out);
+  }
+
+  @override
+  Future<String> checkIn(String eventId, String code) async {
+    final ev = _list('events').where((e) => e['id'] == eventId).firstOrNull;
+    if (ev == null || !_can(ev['publisher_id'], 'events')) {
+      throw CommunityException('Only the organising office can check people in');
+    }
+    final r = _list('rsvps');
+    final i = r.indexWhere((x) => x['event_id'] == eventId && x['code'] == code.trim().toUpperCase());
+    if (i < 0) throw CommunityException('Code not found for this event. Ask them to tap "I\'m going" first.');
+    if (r[i]['checked_in_at'] != null) return '${r[i]['name']} was already checked in';
+    r[i]['checked_in_at'] = DateTime.now().toIso8601String();
+    _put('rsvps', r);
+    await _save();
+    return '${r[i]['name']} checked in';
+  }
+
+  // ------------------------------------------------------------ polls
+  @override
+  Future<List<PostQuestion>> postQuestions(String postId) async {
+    final qs = _list('postQuestions').where((q) => q['post_id'] == postId).toList();
+    final answers = _list('postAnswers');
+    final post = _list('posts').where((p) => p['id'] == postId).firstOrNull;
+    final isAuthor = post?['author_id'] == _me.id;
+    return _tick([
+      for (final q in qs)
+        () {
+          final mine = answers.where((a) => a['question_id'] == q['id'] && a['user_id'] == _me.id).firstOrNull;
+          final show = mine != null || isAuthor;
+          final opts = List<String>.from(q['options']);
+          final all = answers.where((a) => a['question_id'] == q['id']).toList();
+          return PostQuestion(
+            id: q['id'],
+            kind: q['kind'],
+            prompt: q['prompt'],
+            options: opts,
+            myAnswer: mine?['option_index'],
+            correctIndex: show ? q['correct_index'] : null,
+            counts: show ? [for (var i = 0; i < opts.length; i++) all.where((a) => a['option_index'] == i).length] : null,
+            total: all.length,
+          );
+        }(),
+    ]);
+  }
+
+  @override
+  Future<void> answerQuestion(String questionId, int option) async {
+    final a = _list('postAnswers');
+    if (a.any((x) => x['question_id'] == questionId && x['user_id'] == _me.id)) {
+      throw CommunityException('You already answered this one');
+    }
+    a.add({'question_id': questionId, 'user_id': _me.id, 'option_index': option});
+    _put('postAnswers', a);
+    await _save();
+  }
+
+  @override
+  Future<void> addPostQuestions(String postId, List<PostQuestion> questions) async {
+    final post = _list('posts').where((p) => p['id'] == postId).firstOrNull;
+    if (post == null || post['author_id'] != _me.id) throw CommunityException('Only the author can add questions');
+    _put('postQuestions', [
+      ..._list('postQuestions'),
+      for (final q in questions)
+        {
+          'id': _uuid.v4(),
+          'post_id': postId,
+          'kind': q.kind,
+          'prompt': q.prompt.trim(),
+          'options': q.options,
+          'correct_index': q.isQuiz ? q.correctIndex : null,
+        }
+    ]);
+    await _save();
+  }
 }

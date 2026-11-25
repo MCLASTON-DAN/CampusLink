@@ -19,6 +19,9 @@ flutter --version
 flutter config --no-analytics >/dev/null 2>&1 || true
 
 flutter pub get
+# Safety gate: never publish code that fails its checks or tests.
+flutter analyze --no-fatal-infos
+flutter test
 flutter build web --release \
   --base-href "/" \
   --no-web-resources-cdn \

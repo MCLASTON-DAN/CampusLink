@@ -32,6 +32,12 @@ jobs:
 
       - run: flutter pub get
 
+      # Safety gate: nothing is published unless the code checks and all tests pass.
+      - name: Check code
+        run: flutter analyze --no-fatal-infos
+      - name: Run all tests
+        run: flutter test
+
       - name: Put the permanent signing key in place
         env:
           KEYSTORE_B64: ${{ secrets.ANDROID_KEYSTORE_BASE64 }}

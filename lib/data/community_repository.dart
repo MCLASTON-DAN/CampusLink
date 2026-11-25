@@ -152,6 +152,28 @@ abstract class CommunityApi {
   /// View details for the posts I (or my office) published; all posts for admins.
   Future<List<PostInsight>> postInsights({int days = 90});
 
+  // ---- admin dashboard ----
+  /// Marks "this person used the app today" (counted, never listed by name).
+  Future<void> touchActivity();
+  /// Staff only: the platform at a glance.
+  Future<AdminOverview> adminOverview();
+
+  // ---- event RSVP and check-in ----
+  /// My RSVP for an event, or null. Includes my private check-in code.
+  Future<Rsvp?> myRsvp(String eventId);
+  Future<Rsvp> rsvp(String eventId);
+  Future<void> cancelRsvp(String eventId);
+  /// Public numbers: how many are going and how many came.
+  Future<Map<String, (int, int)>> rsvpCounts(List<String> eventIds);
+  /// Organiser only. Returns e.g. "Mary Achieng checked in".
+  Future<String> checkIn(String eventId, String code);
+
+  // ---- polls and quizzes in posts ----
+  Future<List<PostQuestion>> postQuestions(String postId);
+  Future<void> answerQuestion(String questionId, int option);
+  /// Author only: attach questions to a post they just published.
+  Future<void> addPostQuestions(String postId, List<PostQuestion> questions);
+
   // ---- profile photo ----
   /// Uploads a small square photo and returns its public link.
   Future<String> uploadAvatar(Uint8List bytes);

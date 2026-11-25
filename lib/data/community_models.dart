@@ -839,6 +839,70 @@ class PostInsight {
   }
 }
 
+/// The admin dashboard numbers.
+class AdminOverview {
+  AdminOverview(this.m);
+  final Map<String, dynamic> m;
+  int n(String k) => ((m[k] ?? 0) as num).toInt();
+  List<(DateTime, int)> get dailyActive => [
+        for (final d in (m['daily_active'] as List? ?? const []))
+          (DateTime.parse('${d['day']}'), ((d['n'] ?? 0) as num).toInt()),
+      ];
+  List<(String, String, int)> get topPosts => [
+        for (final p in (m['top_posts'] as List? ?? const []))
+          ('${p['id']}', '${p['title']}', ((p['views'] ?? 0) as num).toInt()),
+      ];
+}
+
+class Rsvp {
+  Rsvp({required this.eventId, required this.code, this.checkedInAt});
+  final String eventId;
+  /// Private 6-character code, shown as a QR at the door.
+  final String code;
+  final DateTime? checkedInAt;
+  factory Rsvp.fromMap(Map<String, dynamic> m) => Rsvp(
+        eventId: m['event_id'],
+        code: m['code'],
+        checkedInAt: m['checked_in_at'] == null ? null : DateTime.parse('${m['checked_in_at']}'),
+      );
+}
+
+/// A poll or quiz question inside a news post.
+class PostQuestion {
+  PostQuestion({
+    this.id = '',
+    required this.kind,
+    required this.prompt,
+    required this.options,
+    this.correctIndex,
+    this.myAnswer,
+    this.counts,
+    this.total = 0,
+  });
+  final String id;
+  final String kind; // poll | quiz
+  final String prompt;
+  final List<String> options;
+  /// Quiz only. Hidden (null) until you have answered.
+  final int? correctIndex;
+  final int? myAnswer;
+  /// Votes per option. Hidden (null) until you have answered.
+  final List<int>? counts;
+  final int total;
+  bool get isQuiz => kind == 'quiz';
+  bool get answered => myAnswer != null;
+  factory PostQuestion.fromMap(Map<String, dynamic> m) => PostQuestion(
+        id: m['id'],
+        kind: m['kind'],
+        prompt: m['prompt'],
+        options: List<String>.from(m['options'] ?? const []),
+        correctIndex: m['correct_index'],
+        myAnswer: m['my_answer'],
+        counts: m['counts'] == null ? null : List<int>.from((m['counts'] as List).map((e) => (e as num).toInt())),
+        total: ((m['total'] ?? 0) as num).toInt(),
+      );
+}
+
 /// A person found by username or name, for appointing.
 class PersonHit {
   PersonHit({

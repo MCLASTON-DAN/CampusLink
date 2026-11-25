@@ -25,6 +25,12 @@ jobs:
 
       - run: flutter pub get
 
+      # Safety gate: nothing is published unless the code checks and all tests pass.
+      - name: Check code
+        run: flutter analyze --no-fatal-infos
+      - name: Run all tests
+        run: flutter test
+
       - name: Build web (PWA) for the site root
         # The Cloudflare address serves the app at "/", so base href is "/".
         run: |

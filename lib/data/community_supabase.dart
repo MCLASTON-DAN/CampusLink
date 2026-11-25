@@ -997,4 +997,75 @@ class SupabaseCommunity implements CommunityApi {
         'handled_by': _uid,
         'handled_at': DateTime.now().toUtc().toIso8601String(),
       }).eq('id', reportId));
+
+  // ------------------------------------------------------------ dashboard
+  @override
+  Future<void> touchActivity() async {
+    try {
+      await _client.rpc('touch_activity');
+    } catch (_) {/* counting must never get in the way */}
+  }
+
+  @override
+  Future<AdminOverview> adminOverview() => _guard(() async {
+        final m = await _client.rpc('admin_overview');
+        return AdminOverview(Map<String, dynamic>.from(m as Map));
+      });
+
+  // ------------------------------------------------------------ RSVP
+  @override
+  Future<Rsvp?> myRsvp(String eventId) => _guard(() async {
+        final r = await _client.from('event_rsvps').select().eq('event_id', eventId).eq('user_id', _uid).maybeSingle();
+        return r == null ? null : Rsvp.fromMap(r);
+      });
+
+  @override
+  Future<Rsvp> rsvp(String eventId) => _guard(() async {
+        final r = await _client.from('event_rsvps').insert({'event_id': eventId}).select().single();
+        return Rsvp.fromMap(r);
+      });
+
+  @override
+  Future<void> cancelRsvp(String eventId) =>
+      _guard(() => _client.from('event_rsvps').delete().eq('event_id', eventId).eq('user_id', _uid));
+
+  @override
+  Future<Map<String, (int, int)>> rsvpCounts(List<String> eventIds) => _guard(() async {
+        if (eventIds.isEmpty) return <String, (int, int)>{};
+        final rows = await _client.rpc('event_rsvp_counts', params: {'p_events': eventIds}) as List;
+        return {
+          for (final r in rows) r['event_id'] as String: ((r['going'] as num).toInt(), (r['checked_in'] as num).toInt()),
+        };
+      });
+
+  @override
+  Future<String> checkIn(String eventId, String code) =>
+      _guard(() async => '${await _client.rpc('event_check_in', params: {'p_event': eventId, 'p_code': code})}');
+
+  // ------------------------------------------------------------ polls
+  @override
+  Future<List<PostQuestion>> postQuestions(String postId) => _guard(() async {
+        final rows = await _client.rpc('post_questions_for', params: {'p_post': postId}) as List;
+        return rows.map((r) => PostQuestion.fromMap(Map<String, dynamic>.from(r))).toList();
+      });
+
+  @override
+  Future<void> answerQuestion(String questionId, int option) =>
+      _guard(() => _client.rpc('answer_post_question', params: {'p_question': questionId, 'p_option': option}));
+
+  @override
+  Future<void> addPostQuestions(String postId, List<PostQuestion> questions) => _guard(() async {
+        if (questions.isEmpty) return;
+        await _client.from('post_questions').insert([
+          for (var i = 0; i < questions.length; i++)
+            {
+              'post_id': postId,
+              'position': i,
+              'kind': questions[i].kind,
+              'prompt': questions[i].prompt.trim(),
+              'options': questions[i].options.map((o) => o.trim()).toList(),
+              'correct_index': questions[i].isQuiz ? questions[i].correctIndex : null,
+            }
+        ]);
+      });
 }

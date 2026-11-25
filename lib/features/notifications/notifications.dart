@@ -64,6 +64,8 @@ class _HostState extends ConsumerState<NotificationHost> {
     _sub?.cancel();
     _sub = null;
     if (userId == null) return;
+    // Counted once a day for the admin dashboard (numbers only, never names).
+    ref.read(communityProvider).touchActivity();
     _sub = ref.read(communityProvider).newNotifications().listen((n) {
       ref.invalidate(notificationsProvider);
       if (n.kind == 'course') ref.invalidate(courseNoticesProvider);
