@@ -123,3 +123,12 @@ abstract class CampusRepository {
   /// News, events, offices, tutors, surveys… (see community_repository.dart)
   CommunityApi get community;
 }
+
+
+/// Sign-up worked, but the account only opens after the person taps the
+/// link (or types the code) in the confirmation email.
+class EmailConfirmationNeeded implements Exception {
+  const EmailConfirmationNeeded();
+  @override
+  String toString() => 'Check your email to confirm your account.';
+}

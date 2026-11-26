@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter/services.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
+import 'package:supabase_flutter/supabase_flutter.dart' show Supabase, AuthChangeEvent;
 
 import 'core/config.dart';
 import 'core/theme.dart';
@@ -12,6 +13,10 @@ import 'features/community/tutor_checks.dart';
 import 'features/timetable/class_reminders_sync.dart';
 import 'features/announcements/announcements_screen.dart';
 import 'features/auth/login_screen.dart';
+import 'features/account/calendar_sync_screen.dart';
+import 'features/account/email_rules_admin.dart';
+import 'features/account/password_screens.dart';
+import 'features/account/tutor_offer.dart';
 import 'features/buddy/buddy_screen.dart';
 import 'features/community/policy_gate.dart';
 import 'features/courses/courses_screen.dart';
@@ -45,7 +50,7 @@ final _rootKey = GlobalKey<NavigatorState>();
 // profile changed (sign-in, token refresh, profile reload), which restarted
 // the whole app and made the screen flash 2-3 times after signing in.
 final routerProvider = Provider<GoRouter>((ref) {
-  return GoRouter(
+  final router = GoRouter(
     navigatorKey: _rootKey,
     initialLocation: '/home',
     redirect: (context, state) {
@@ -53,6 +58,9 @@ final routerProvider = Provider<GoRouter>((ref) {
       if (auth.isLoading) return null;
       final signedIn = auth.valueOrNull != null;
       final onLogin = state.matchedLocation == '/login';
+      // Password reset pages work signed in or out: the reset itself signs you
+      // in for a moment, and the profile may not have loaded yet.
+      if (const {'/forgot-password', '/set-password'}.contains(state.matchedLocation)) return null;
       if (!signedIn && !onLogin) return '/login';
       if (signedIn && onLogin) return '/home';
       return null;
@@ -60,6 +68,10 @@ final routerProvider = Provider<GoRouter>((ref) {
     refreshListenable: _AuthNotifier(ref),
     routes: [
       GoRoute(path: '/login', builder: (_, __) => const LoginScreen()),
+      GoRoute(
+          path: '/forgot-password',
+          builder: (_, s) => ForgotPasswordScreen(initialEmail: s.extra is String ? s.extra as String : '')),
+      GoRoute(path: '/set-password', builder: (_, __) => const SetNewPasswordScreen()),
       ShellRoute(
         builder: (context, state, child) =>
             NotificationHost(
@@ -134,6 +146,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/tutors', builder: (_, __) => const TutorsScreen()),
           GoRoute(path: '/tutors/mine', builder: (_, __) => const MyLessonsScreen()),
           GoRoute(path: '/tutors/profile', builder: (_, __) => const TutorProfileEditScreen()),
+          GoRoute(path: '/tutors/offer', builder: (_, __) => const TutorOfferScreen()),
+          GoRoute(path: '/account/calendar', builder: (_, __) => const CalendarSyncScreen()),
+          GoRoute(path: '/admin/email-rules', builder: (_, __) => const EmailRulesAdminScreen()),
           GoRoute(path: '/moderation', builder: (_, __) => const ModerationLogScreen()),
           GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
           GoRoute(path: '/campuses', builder: (_, __) => const CampusesScreen()),
@@ -143,6 +158,17 @@ final routerProvider = Provider<GoRouter>((ref) {
       ),
     ],
   );
+  // The reset email (link or 6-digit code) signs the person in "for recovery":
+  // send them straight to "Choose a new password".
+  if (AppConfig.hasSupabase) {
+    try {
+      final sub = Supabase.instance.client.auth.onAuthStateChange.listen((s) {
+        if (s.event == AuthChangeEvent.passwordRecovery) router.go('/set-password');
+      });
+      ref.onDispose(sub.cancel);
+    } catch (_) {/* demo fallback: Supabase not started */}
+  }
+  return router;
 });
 
 /// Re-checks the route only when someone signs in or out (not on every

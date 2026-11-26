@@ -16,6 +16,7 @@ import 'package:intl/intl.dart';
 import '../../core/image_tools.dart';
 import '../../widgets/badge.dart';
 import '../../widgets/media.dart';
+import '../account/password_screens.dart';
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -91,6 +92,10 @@ class ProfileScreen extends ConsumerWidget {
             ActionTile(icon: Icons.support_agent_rounded, title: 'My help requests', subtitle: 'Track what you asked', color: const Color(0xFFF97316), onTap: () => context.push('/requests')),
             ActionTile(icon: Icons.gavel_rounded, title: 'Public record', subtitle: 'Removals and office changes, with reasons', color: const Color(0xFF64748B), onTap: () => context.push('/moderation')),
             ActionTile(icon: Icons.notifications_rounded, title: 'Notifications', subtitle: 'Inbox and pop-up settings', color: const Color(0xFFDB2777), onTap: () => context.push('/notifications')),
+            ActionTile(icon: Icons.event_available_rounded, title: 'My calendar', subtitle: 'Classes, exams and events in Google Calendar', color: const Color(0xFF0D9488), onTap: () => context.push('/account/calendar')),
+            ActionTile(icon: Icons.password_rounded, title: 'Password', subtitle: 'Create or change your password', color: const Color(0xFF334155), onTap: () => openPasswordSettings(context)),
+            if (user.isTutor)
+              ActionTile(icon: Icons.payments_rounded, title: 'Price and contact', subtitle: 'What you charge, how students reach you', color: const Color(0xFF16A34A), onTap: () => context.push('/tutors/offer')),
             Card(
               child: SwitchListTile(
                 secondary: const Icon(Icons.data_saver_on_rounded),
@@ -124,6 +129,8 @@ class ProfileScreen extends ConsumerWidget {
                 ActionTile(icon: Icons.assignment_ind_rounded, title: 'Lecturers & units', subtitle: 'Who can message which unit', color: const Color(0xFFF97316), onTap: () => context.push('/courses/lecturers')),
               if (user.isStaff)
                 ActionTile(icon: Icons.location_city_rounded, title: 'Campuses & offices', subtitle: 'Keep places and hours correct', color: const Color(0xFF6366F1), onTap: () => context.push('/campuses')),
+              if (user.isSuperAdmin)
+                ActionTile(icon: Icons.alternate_email_rounded, title: 'Who can join', subtitle: 'School email types and exceptions', color: const Color(0xFFDC2626), onTap: () => context.push('/admin/email-rules')),
               if (user.isSuperAdmin)
                 ActionTile(icon: Icons.approval_rounded, title: 'Major event requests', subtitle: 'Approve what shows on home', color: const Color(0xFFF59E0B), onTap: () => context.push('/events/requests')),
             ]),

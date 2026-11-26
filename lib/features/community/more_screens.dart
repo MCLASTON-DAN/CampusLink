@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
-import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/community_models.dart';
 import '../../data/community_repository.dart';
@@ -11,6 +10,8 @@ import '../../widgets/badge.dart';
 import '../../widgets/person_picker.dart';
 import '../../widgets/common.dart';
 import 'tutor_checks.dart';
+import '../account/tutor_offer.dart' show TutorContactCard;
+import '../account/account_api.dart' show TutorOffer;
 
 Future<void> _run(BuildContext context, Future<void> Function() f, {String? ok}) async {
   try {
@@ -513,6 +514,19 @@ class _TutorsScreenState extends ConsumerState<TutorsScreen> {
                       ),
                     if (t.bio.isNotEmpty) Text(t.bio),
                     if (t.availability.isNotEmpty) Text('Free: ${t.availability}', style: Theme.of(context).textTheme.bodySmall),
+                    if (t.rateUgx != null || t.mode != 'both')
+                      Padding(
+                        padding: const EdgeInsets.only(top: 4),
+                        child: Text(
+                          [
+                            if (t.rateUgx != null)
+                              TutorOffer.priceLabel(
+                                  rateUgx: t.rateUgx, unit: t.rateUnit, negotiable: t.negotiable, firstFree: t.firstSessionFree),
+                            if (t.mode == 'online') 'online' else if (t.mode == 'in_person') 'on campus' else 'on campus or online',
+                          ].join(' · '),
+                          style: const TextStyle(fontWeight: FontWeight.w600),
+                        ),
+                      ),
                     const SizedBox(height: 6),
                     OutcomeBar(t),
                     const SizedBox(height: 6),
@@ -523,7 +537,7 @@ class _TutorsScreenState extends ConsumerState<TutorsScreen> {
                         leading: Icon(m.gradeChecked ? Icons.verified_rounded : Icons.help_outline_rounded,
                             color: m.gradeChecked ? const Color(0xFF14A44D) : Colors.grey, size: 20),
                         title: Text('${m.courseCode}${m.courseName == null ? '' : ' · ${m.courseName}'}'),
-                        subtitle: Text('UGX ${fmt.format(m.priceUgx)} per hour'
+                        subtitle: Text('${m.priceUgx == 0 ? 'Free' : 'UGX ${fmt.format(m.priceUgx)} per hour'}'
                             '${m.grade == null ? '' : m.gradeChecked ? ' · grade ${m.grade} (checked)' : ' · says grade ${m.grade} (not checked)'}'),
                         trailing: TextButton(
                           onPressed: () async {
@@ -534,11 +548,10 @@ class _TutorsScreenState extends ConsumerState<TutorsScreen> {
                           child: const Text('Ask'),
                         ),
                       ),
-                    if ((t.contact ?? '').isNotEmpty)
-                      TextButton.icon(
-                          onPressed: () => launchUrl(Uri.parse('https://wa.me/${t.contact!.replaceAll(RegExp(r'[^0-9]'), '')}')),
-                          icon: const Icon(Icons.chat_rounded),
-                          label: const Text('WhatsApp')),
+                    // Phone/email are private: shown once the tutor accepts your
+                    // request (or if the tutor chose "any signed-in student").
+                    if (t.hasContact && t.tutorId != ref.read(currentUserProvider).valueOrNull?.id)
+                      TutorContactCard(tutorId: t.tutorId, tutorName: t.name.split(' ').first),
                   ]),
                 ),
               ),
@@ -679,7 +692,18 @@ class _TutorEditState extends ConsumerState<TutorProfileEditScreen> {
           const SizedBox(height: 8),
           TextField(controller: _bio, maxLines: 3, maxLength: 600, decoration: const InputDecoration(labelText: 'About you (40+ characters)')),
           TextField(controller: _avail, decoration: const InputDecoration(labelText: 'When are you free?')),
-          TextField(controller: _contact, decoration: const InputDecoration(labelText: 'WhatsApp number (optional, shown to students)')),
+          Card(
+            child: ListTile(
+              leading: const Icon(Icons.payments_rounded),
+              title: const Text('Price and contact'),
+              subtitle: const Text('Your general price, phone, WhatsApp and email (kept private)'),
+              trailing: const Icon(Icons.chevron_right_rounded),
+              onTap: () async {
+                await context.push('/tutors/offer');
+                ref.invalidate(tutorCardsProvider);
+              },
+            ),
+          ),
           const SizedBox(height: 12),
           const Text('Modules and price per hour'),
           for (final m in _mods)

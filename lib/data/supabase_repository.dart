@@ -6,6 +6,8 @@ import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, Tar
 import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
+import '../core/config.dart';
+
 import 'community_repository.dart';
 import 'community_supabase.dart';
 import 'models.dart';
@@ -51,6 +53,22 @@ class SupabaseRepository implements CampusRepository {
 
   String get _uid => _client.auth.currentUser?.id ?? '';
 
+  /// Every profile column others may read. Student number is left out on purpose.
+  static const profileColumns = 'id, full_name, programme, year_of_study, faculty, role, is_tutor, tutor_subjects, '
+      'is_buddy_mentor, created_at, tutor_verified, tutor_verified_at, avatar_path, status_text, status_until, '
+      'username, username_changed_at';
+
+  Future<String?> _myStudentNumber() async {
+    try {
+      final r = await _client.rpc('my_private_profile');
+      return (r as Map?)?['student_number'] as String?;
+    } on PostgrestException {
+      // Database not updated to 0023 yet: read it the old way (own row only).
+      final r = await _client.from('profiles').select('student_number').eq('id', _uid).maybeSingle();
+      return r?['student_number'] as String?;
+    }
+  }
+
   Future<void> _refreshProfile() async {
     final u = _client.auth.currentUser;
     if (u == null) {
@@ -59,7 +77,10 @@ class SupabaseRepository implements CampusRepository {
       return;
     }
     try {
-      final row = await _client.from('profiles').select().eq('id', u.id).maybeSingle();
+      // Named columns, never select(*): the student number is private (0023)
+      // and comes from my_private_profile(), which only returns your own.
+      final row = await _client.from('profiles').select(profileColumns).eq('id', u.id).maybeSingle();
+      if (row != null) row['student_number'] = await _myStudentNumber();
       // Badge and office come from the public view (they are worked out, not stored).
       final pub = await _client.from('public_profiles').select('badge, office_title, office_name').eq('id', u.id).maybeSingle();
       if (row == null) {
@@ -105,23 +126,23 @@ class SupabaseRepository implements CampusRepository {
     String? programme,
     int? yearOfStudy,
   }) async {
+    // The details travel with the sign-up and the database copies them into
+    // the profile (0024). Writing the profile from here failed whenever email
+    // confirmation was on, because nobody is signed in until they confirm.
     final res = await _client.auth.signUp(
-      email: email,
+      email: email.trim().toLowerCase(),
       password: password,
-      data: {'full_name': fullName},
-    );
-    final id = res.user?.id;
-    if (id != null) {
-      await _client.from('profiles').upsert({
-        'id': id,
+      emailRedirectTo: kIsWeb ? '${Uri.base.origin}/' : AppConfig.webUrl,
+      data: {
         'full_name': fullName,
-        'student_number': studentNumber,
-        'programme': programme,
-        'year_of_study': yearOfStudy,
-      });
-    }
+        if (studentNumber != null) 'student_number': studentNumber,
+        if (programme != null) 'programme': programme,
+        if (yearOfStudy != null) 'year_of_study': yearOfStudy,
+      },
+    );
+    if (res.session == null) throw const EmailConfirmationNeeded();
     await _refreshProfile();
-    return _user ?? Profile(id: id ?? '', fullName: fullName);
+    return _user ?? Profile(id: res.user?.id ?? '', fullName: fullName);
   }
 
   @override
@@ -139,6 +160,9 @@ class SupabaseRepository implements CampusRepository {
         OAuthProvider.google,
         redirectTo: kIsWeb ? '${Uri.base.origin}/' : 'ug.ac.cavendish.campuslink://login-callback',
         authScreenLaunchMode: kIsWeb ? LaunchMode.platformDefault : LaunchMode.externalApplication,
+        // Always show Google's account list, so students can pick their
+        // school account instead of a personal Gmail that would be refused.
+        queryParams: const {'prompt': 'select_account'},
       );
       return;
     }
@@ -148,6 +172,7 @@ class SupabaseRepository implements CampusRepository {
     final res = await _client.auth.getOAuthSignInUrl(
       provider: OAuthProvider.google,
       redirectTo: 'ug.ac.cavendish.campuslink://login-callback',
+      queryParams: const {'prompt': 'select_account'},
     );
     _closeSheetOnReturn ??= _client.auth.onAuthStateChange.listen((e) {
       if (e.event == AuthChangeEvent.signedIn) closeInAppWebView().catchError((_) {});
@@ -313,7 +338,7 @@ class SupabaseRepository implements CampusRepository {
   // ---- study ----
   @override
   Future<List<Profile>> tutors() async {
-    final rows = await _client.from('profiles').select().eq('is_tutor', true);
+    final rows = await _client.from('profiles').select(profileColumns).eq('is_tutor', true);
     return rows.map(Profile.fromMap).toList();
   }
 
@@ -423,7 +448,7 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<List<Profile>> mentors() async {
-    final rows = await _client.from('profiles').select().eq('is_buddy_mentor', true);
+    final rows = await _client.from('profiles').select(profileColumns).eq('is_buddy_mentor', true);
     return rows.map(Profile.fromMap).toList();
   }
 

@@ -5,6 +5,9 @@ import '../../core/config.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import '../../data/repository.dart' show EmailConfirmationNeeded;
+import '../account/account_api.dart';
+import 'package:go_router/go_router.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -25,6 +28,73 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   bool _busy = false;
   late final AnimationController _anim =
       AnimationController(vsync: this, duration: const Duration(seconds: 6))..repeat(reverse: true);
+  String? _emailHint; // "Cavendish University Uganda student" once the email is recognised
+
+  @override
+  void initState() {
+    super.initState();
+    // Coming back from Google with an error (e.g. a personal Gmail was refused):
+    // the reason is in the web address. Show it instead of a silent failure.
+    final q = {...Uri.base.queryParameters, ...Uri.splitQueryString(Uri.base.fragment.contains('=') ? Uri.base.fragment.replaceFirst(RegExp(r'^/?[^?]*\?'), '') : '')};
+    final err = q['error_description'] ?? q['error'];
+    if (err != null && err.isNotEmpty) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        if (mounted) _showProblem(friendlyAuthError(err));
+      });
+    }
+  }
+
+  void _showProblem(String msg) => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.info_outline_rounded),
+          title: const Text("Couldn't sign you in"),
+          content: Text(msg),
+          actions: [FilledButton(onPressed: () => Navigator.pop(ctx), child: const Text('OK'))],
+        ),
+      );
+
+  Future<void> _checkEmail() async {
+    if (!_signup || ref.read(isDemoModeProvider)) return;
+    final email = _email.text.trim();
+    if (SchoolEmail.quickCheck(email) != null) return setState(() => _emailHint = null);
+    final r = await AccountApi.instance.checkEmail(email);
+    if (!mounted) return;
+    setState(() => _emailHint = r.allowed
+        ? (r.institution == null ? null : '${r.institution}${r.kind == 'staff' ? ' staff' : r.kind == 'student' ? ' student' : ''}')
+        : null);
+    if (!r.allowed && r.message != null) showSnack(context, r.message!);
+  }
+
+  Future<void> _confirmSent(String email) => showDialog<void>(
+        context: context,
+        builder: (ctx) => AlertDialog(
+          icon: const Icon(Icons.mark_email_read_rounded, size: 40),
+          title: const Text('Check your school email'),
+          content: Text('We sent a link to $email. Open it to finish making your account, then sign in here.\n\n'
+              'Not there after 2 minutes? Look in Spam or Promotions.'),
+          actions: [
+            TextButton(
+              onPressed: () async {
+                try {
+                  await AccountApi.instance.resendConfirmation(email);
+                  if (ctx.mounted) showSnack(ctx, 'Sent again.');
+                } catch (e) {
+                  if (ctx.mounted) showSnack(ctx, friendlyAuthError(e));
+                }
+              },
+              child: const Text('Send again'),
+            ),
+            FilledButton(
+              onPressed: () {
+                Navigator.pop(ctx);
+                setState(() => _signup = false);
+              },
+              child: const Text('OK'),
+            ),
+          ],
+        ),
+      );
 
   @override
   void dispose() {
@@ -41,7 +111,16 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
     if (!_form.currentState!.validate()) return;
     setState(() => _busy = true);
     final repo = ref.read(repositoryProvider);
+    final demo = ref.read(isDemoModeProvider);
     try {
+      if (_signup && !demo) {
+        // Friendly early check; the database checks again when the account is made.
+        final r = await AccountApi.instance.checkEmail(_email.text);
+        if (!r.allowed) {
+          if (mounted) _showProblem(r.message ?? friendlyAuthError('school email'));
+          return;
+        }
+      }
       if (_signup) {
         await repo.signUp(
           email: _email.text.trim(),
@@ -54,8 +133,13 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
       } else {
         await repo.signIn(email: _email.text.trim(), password: _password.text);
       }
+    } on EmailConfirmationNeeded {
+      if (mounted) await _confirmSent(_email.text.trim());
     } catch (e) {
-      if (mounted) showSnack(context, friendlyAuthError(e));
+      if (mounted) {
+        final m = friendlyAuthError(e);
+        m.contains('school email') ? _showProblem(m) : showSnack(context, m);
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -142,12 +226,17 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                 Text(
                   demo
                       ? 'Demo mode: any email and password work. Use an email containing "staff" to see staff tools.'
-                      : 'The quickest way in is your Google account.',
+                      : _signup
+                          ? 'Only school email addresses can join.'
+                          : 'Sign in with your school account.',
                   style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant),
                 ),
                 const SizedBox(height: 20),
                 if (!demo) ...[
                   _GoogleButton(onPressed: _busy ? null : _google),
+                  const SizedBox(height: 6),
+                  Text('Pick your school account, like od251945@students.cavendish.ac.ug',
+                      textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 16),
                   Row(children: [
                     const Expanded(child: Divider()),
@@ -196,18 +285,47 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                   controller: _email,
                   keyboardType: TextInputType.emailAddress,
                   autofillHints: const [AutofillHints.email],
-                  decoration: const InputDecoration(labelText: 'Email', prefixIcon: Icon(Icons.alternate_email)),
-                  validator: (v) => (v ?? '').contains('@') ? null : 'Enter a valid email',
+                  decoration: InputDecoration(
+                    labelText: demo ? 'Email' : 'School email',
+                    hintText: 'od251945@students.cavendish.ac.ug',
+                    prefixIcon: const Icon(Icons.alternate_email),
+                    helperText: _signup ? _emailHint : null,
+                  ),
+                  onEditingComplete: () {
+                    _checkEmail();
+                    FocusScope.of(context).nextFocus();
+                  },
+                  validator: (v) {
+                    if (demo) return (v ?? '').contains('@') ? null : 'Enter a valid email';
+                    // New accounts need a school email. Signing in stays open, so
+                    // older accounts (made before the rule) still get in.
+                    if (_signup) return SchoolEmail.quickCheck(v ?? '');
+                    return RegExp(r'^[^@\s]+@[^@\s]+\.[^@\s]+$').hasMatch((v ?? '').trim()) ? null : 'Enter your email';
+                  },
                 ),
                 const SizedBox(height: 12),
                 TextFormField(
                   controller: _password,
                   obscureText: true,
-                  autofillHints: const [AutofillHints.password],
+                  autofillHints: [_signup ? AutofillHints.newPassword : AutofillHints.password],
                   decoration: const InputDecoration(labelText: 'Password', prefixIcon: Icon(Icons.lock_outline)),
-                  validator: (v) => (v ?? '').length < 6 ? 'At least 6 characters' : null,
+                  validator: (v) {
+                    if (demo) return (v ?? '').length < 6 ? 'At least 6 characters' : null;
+                    if (_signup) return PasswordRules.check(v ?? '', email: _email.text);
+                    return (v ?? '').isEmpty ? 'Enter your password' : null;
+                  },
                   onFieldSubmitted: (_) => _submit(),
                 ),
+                if (!_signup && !demo)
+                  Align(
+                    alignment: Alignment.centerRight,
+                    child: TextButton(
+                      onPressed: _busy
+                          ? null
+                          : () => context.push('/forgot-password', extra: _email.text.trim()),
+                      child: const Text('Forgot password?'),
+                    ),
+                  ),
                 const SizedBox(height: 20),
                 FilledButton(
                   onPressed: _busy ? null : _submit,
@@ -293,21 +411,7 @@ class _Hero extends StatelessWidget {
 
 
 /// Turns sign-in errors into words a student understands.
-String friendlyAuthError(Object e) {
-  final m = e.toString().toLowerCase();
-  if (m.contains('email logins are disabled') || m.contains('email_provider_disabled') || m.contains('signups not allowed')) {
-    return 'Email sign-in is switched off for now. Please use "Continue with Google".';
-  }
-  if (m.contains('invalid login credentials')) return 'Wrong email or password.';
-  if (m.contains('already registered')) return 'That email already has an account. Sign in instead.';
-  if (m.contains('email not confirmed')) return 'Please confirm your email first (check your inbox).';
-  if (m.contains('provider is not enabled')) return 'Google sign-in is not switched on yet. Ask the admin.';
-  if (m.contains('socket') || m.contains('failed host lookup') || m.contains('network') || m.contains('xmlhttprequest')) {
-    return 'No internet connection. Check it and try again.';
-  }
-  if (m.contains('rate limit')) return 'Too many tries. Wait a minute and try again.';
-  return 'Could not sign in. Please try again.';
-}
+String friendlyAuthError(Object e) => friendlyAccountError(e);
 
 class _GoogleButton extends StatelessWidget {
   const _GoogleButton({required this.onPressed});

@@ -668,6 +668,12 @@ class SupabaseCommunity implements CommunityApi {
       outcomes = await _client.rpc('tutor_outcome_bands') as List; // 0018
     } on PostgrestException {/* database not updated yet: no results shown */}
     final outById = {for (final o in outcomes) o['tutor_id']: o};
+    // Which tutors have contact details (icons only, never the numbers).
+    var hints = const <dynamic>[];
+    try {
+      hints = await _client.rpc('tutor_contact_summary', params: {'p_tutors': ids}) as List;
+    } on PostgrestException {/* database not updated yet */}
+    final hById = {for (final h in hints) h['tutor_id'] as String: h};
     final stById = {for (final s in stats) s['tutor_id'] as String: s};
     final pById = {for (final p in profiles) p['tutor_id'] as String: p};
     final sById = {for (final s in scores) s['tutor_id'] as String: s};
@@ -683,7 +689,15 @@ class SupabaseCommunity implements CommunityApi {
         year: p['year_of_study'],
         verified: p['tutor_verified'] ?? false,
         bio: pr?['bio'] ?? '',
-        contact: pr?['contact_whatsapp'],
+        // The old public WhatsApp field is no longer shown: numbers are private now.
+        contact: null,
+        rateUgx: (pr?['rate_ugx'] as num?)?.toInt(),
+        rateUnit: '${pr?['rate_unit'] ?? 'hour'}',
+        negotiable: pr?['price_negotiable'] == true,
+        firstSessionFree: pr?['first_session_free'] == true,
+        mode: '${pr?['teaching_mode'] ?? 'both'}',
+        hasContact: hById[id]?['has_phone'] == true || hById[id]?['has_email'] == true,
+        hasWhatsapp: hById[id]?['has_whatsapp'] == true,
         availability: pr?['availability'] ?? '',
         modules: modules.where((m) => m['tutor_id'] == id).map(TutorModule.fromMap).toList(),
         score: ((sc?['score'] ?? 0) as num).toDouble(),
@@ -726,7 +740,9 @@ class SupabaseCommunity implements CommunityApi {
         await _client.from('tutor_profiles').upsert({
           'tutor_id': _uid,
           'bio': bio.trim(),
-          'contact_whatsapp': contact,
+          // Phone and email live in the private tutor_contacts table now
+          // (Me → Price and contact). Clear any number left in the old public field.
+          'contact_whatsapp': null,
           'availability': availability.trim(),
           'updated_at': DateTime.now().toUtc().toIso8601String(),
         });

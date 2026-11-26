@@ -744,7 +744,25 @@ class TutorCard {
     this.outcomeReports = 0,
     this.outcomeBands,
     this.outcomeConfidence = 0,
+    this.rateUgx,
+    this.rateUnit = 'hour',
+    this.negotiable = false,
+    this.firstSessionFree = false,
+    this.mode = 'both',
+    this.hasContact = false,
+    this.hasWhatsapp = false,
   });
+
+  /// General price (0022). Null = not set, 0 = free. A unit's own price wins.
+  final int? rateUgx;
+  final String rateUnit; // hour | session | week | month
+  final bool negotiable;
+  final bool firstSessionFree;
+  final String mode; // in_person | online | both
+
+  /// The tutor saved a phone or email (the number itself stays private).
+  final bool hasContact;
+  final bool hasWhatsapp;
 
   /// Lessons the tutor has actually taught (students confirmed them).
   final int lessons;
