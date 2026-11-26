@@ -6,6 +6,7 @@ import 'package:intl/intl.dart';
 import '../community/tutor_checks.dart';
 import '../../data/community_models.dart';
 import '../../data/providers.dart';
+import '../../widgets/common.dart';
 import '../../widgets/section.dart';
 
 final _overviewProvider = FutureProvider.autoDispose<AdminOverview>((ref) => ref.watch(communityProvider).adminOverview());
@@ -37,6 +38,7 @@ class AdminDashboardScreen extends ConsumerWidget {
             ]),
             const SizedBox(height: 12),
             _ActiveChart(o.dailyActive),
+            if (ref.watch(currentUserProvider).valueOrNull?.isSuperAdmin ?? false) const _SemesterEndTile(),
             const SectionTitle('Needs attention'),
             _Tiles([
               ('Reported content', o.n('open_reports'), 'waiting for a decision', Icons.flag_rounded, '/reports'),
@@ -167,6 +169,44 @@ class _ActiveChart extends StatelessWidget {
             Text('Today', style: t.labelSmall),
           ]),
         ]),
+      ),
+    );
+  }
+}
+
+
+final _semesterEndProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).semesterEnd());
+
+/// Super admin: when the semester ends. 3 and 10 days later, students who had
+/// tutoring are reminded to share their grade band.
+class _SemesterEndTile extends ConsumerWidget {
+  const _SemesterEndTile();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final end = ref.watch(_semesterEndProvider).valueOrNull;
+    return Card(
+      child: ListTile(
+        leading: const Icon(Icons.event_note_rounded),
+        title: Text(end == null ? 'Semester end date not set' : 'Semester ends ${DateFormat('d MMM yyyy').format(end)}'),
+        subtitle: const Text('Students who had tutoring are reminded to share results 3 and 10 days after.'),
+        trailing: TextButton(
+          child: Text(end == null ? 'Set' : 'Change'),
+          onPressed: () async {
+            final d = await showDatePicker(
+              context: context,
+              initialDate: end ?? DateTime.now(),
+              firstDate: DateTime.now().subtract(const Duration(days: 30)),
+              lastDate: DateTime.now().add(const Duration(days: 400)),
+            );
+            if (d == null) return;
+            try {
+              await ref.read(communityProvider).setSemesterEnd(d);
+              ref.invalidate(_semesterEndProvider);
+            } catch (_) {
+              if (context.mounted) showSnack(context, 'Could not save. Run the latest database update first.');
+            }
+          },
+        ),
       ),
     );
   }

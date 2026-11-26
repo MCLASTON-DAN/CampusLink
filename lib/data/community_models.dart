@@ -1,3 +1,5 @@
+import 'dart:math' as math;
+
 // Models for the community side of CampusLink: who speaks for whom, news,
 // comments, campuses, lost & found, surveys and tutors.
 // Every class has fromMap/toMap so it works for Supabase rows and for the
@@ -726,6 +728,9 @@ class TutorCard {
     this.lessons = 0,
     this.paused = false,
     this.upheld = 0,
+    this.outcomeReports = 0,
+    this.outcomeBands,
+    this.outcomeConfidence = 0,
   });
 
   /// Lessons the tutor has actually taught (students confirmed them).
@@ -736,18 +741,32 @@ class TutorCard {
   /// Reports staff upheld against this tutor.
   final int upheld;
 
+  /// Students who reported their grade band after lessons.
+  final int outcomeReports;
+
+  /// Counts per band [<50, 50-59, 60-69, 70-79, 80+]. Null until 5+ reports,
+  /// so a tiny sample never looks like a big result.
+  final List<int>? outcomeBands;
+
+  /// Cautious share of students at 60+ (Wilson lower bound). 1 of 1 ≈ 0.21.
+  final double outcomeConfidence;
+
   /// Units whose grade a reviewer checked.
   List<TutorModule> get checkedModules => modules.where((m) => m.gradeChecked).toList();
 
   /// The 4 levels. Same rules as the database (0014):
   /// 1 New: grades typed in only. Found by search, never suggested.
   /// 2 Grade-checked: a results slip was checked. Suggested for those units.
-  /// 3 Experienced: + 10 lessons and rating 4.0+ from 3+ reviews.
-  /// 4 Expert: the blue tick (30 lessons, 4.3+, 5+ reviewers, no upheld reports).
+  /// 3 Experienced: + 10 lessons, rating 4.0+ from 3+ reviews, AND results:
+  ///   5+ students reported and the cautious 60+ share is at least 0.35.
+  /// 4 Expert: the blue tick (set by the database: 30 lessons, 4.3+, 5+
+  ///   reviewers, no upheld reports, 10+ results with 60+ confidence 0.5+).
   int get levelNo {
     if (verified) return 4;
     if (checkedModules.isEmpty) return 1;
-    if (lessons >= 10 && reviews >= 3 && score >= 4.0 && upheld == 0) return 3;
+    if (lessons >= 10 && reviews >= 3 && score >= 4.0 && upheld == 0 && outcomeReports >= 5 && outcomeConfidence >= 0.35) {
+      return 3;
+    }
     return 2;
   }
 
@@ -755,6 +774,21 @@ class TutorCard {
 
   /// Shown in the platform's suggestions (not just search).
   bool get suggested => levelNo >= 2 && !paused;
+}
+
+const outcomeBandLabels = ['Below 50', '50–59', '60–69', '70–79', '80+'];
+
+/// The semester a date falls in, e.g. 2026-S2 (July–December).
+String semesterOf(DateTime d) => '${d.year}-S${d.month <= 6 ? 1 : 2}';
+
+/// Cautious share of "good" out of n (Wilson lower bound, 95%). Same as the database.
+double outcomeConfidence(int good, int n) {
+  if (n == 0) return 0;
+  final p = good / n;
+  const z = 1.96;
+  final centre = p + z * z / (2 * n);
+  final spread = z * math.sqrt((p * (1 - p) + z * z / (4 * n)) / n);
+  return (centre - spread) / (1 + z * z / n);
 }
 
 /// A tutor's results slip waiting for, or past, a check.

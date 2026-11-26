@@ -514,6 +514,8 @@ class _TutorsScreenState extends ConsumerState<TutorsScreen> {
                     if (t.bio.isNotEmpty) Text(t.bio),
                     if (t.availability.isNotEmpty) Text('Free: ${t.availability}', style: Theme.of(context).textTheme.bodySmall),
                     const SizedBox(height: 6),
+                    OutcomeBar(t),
+                    const SizedBox(height: 6),
                     for (final m in t.modules.where((m) => searching || m.gradeChecked))
                       ListTile(
                         dense: true,
@@ -561,6 +563,8 @@ class MyLessonsScreen extends ConsumerWidget {
         builder: (list) => ListView(padding: const EdgeInsets.all(12), children: [
           if (me?.isTutor == true || true)
             OutlinedButton.icon(onPressed: () => context.push('/tutors/profile'), icon: const Icon(Icons.edit), label: const Text('My tutor profile & prices')),
+          if (ref.watch(_myCardProvider).valueOrNull case final c?)
+            Card(child: Padding(padding: const EdgeInsets.all(12), child: OutcomeBar(c))),
           if (list.isEmpty) const EmptyState(icon: Icons.inbox_rounded, title: 'No lessons yet'),
           for (final r in list)
             Card(
@@ -571,6 +575,8 @@ class MyLessonsScreen extends ConsumerWidget {
                   isThreeLine: true,
                   trailing: _actions(context, r, me?.id, api, refresh),
                 ),
+                if (r.status == 'completed')
+                  _ResultRow(r: r, me: me?.id),
                 if (r.studentId == me?.id && (r.status == 'accepted' || r.status == 'completed'))
                   Align(
                     alignment: Alignment.centerRight,
@@ -1285,4 +1291,43 @@ class _HandInNotice extends StatelessWidget {
               'Lost something? Check here first, then ask at the $kLostFoundDropOff.'),
         ),
       );
+}
+
+
+final _myCardProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).myTutorCard());
+final _myOutcomesProvider = FutureProvider.autoDispose((ref) => ref.watch(communityProvider).myOutcomes());
+
+/// Under a completed lesson: the student shares their band; the tutor can ask.
+class _ResultRow extends ConsumerWidget {
+  const _ResultRow({required this.r, required this.me});
+  final TutorRequest r;
+  final String? me;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final api = ref.read(communityProvider);
+    if (r.tutorId == me) {
+      return Align(
+        alignment: Alignment.centerRight,
+        child: TextButton.icon(
+          icon: const Icon(Icons.insights_rounded, size: 18),
+          label: const Text('Ask how it went'),
+          onPressed: () => _run(context, () => api.askProgress(r.id), ok: 'Asked. They can share their grade band.'),
+        ),
+      );
+    }
+    final mine = ref.watch(_myOutcomesProvider).valueOrNull?['${r.tutorId}|${normCode(r.courseCode)}'];
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        icon: Icon(mine == null ? Icons.grading_rounded : Icons.check_circle_rounded, size: 18),
+        label: Text(mine == null ? 'Share my result' : 'Your result: ${outcomeBandLabels[mine]} (change)'),
+        onPressed: () async {
+          final band = await pickOutcomeBand(context, r.courseCode, current: mine);
+          if (band == null || !context.mounted) return;
+          await _run(context, () => api.reportOutcome(tutorId: r.tutorId, courseCode: r.courseCode, band: band), ok: 'Thanks – it helps others pick good tutors.');
+          ref.invalidate(_myOutcomesProvider);
+        },
+      ),
+    );
+  }
 }

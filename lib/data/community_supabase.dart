@@ -663,6 +663,11 @@ class SupabaseCommunity implements CommunityApi {
     } on PostgrestException {
       stats = await _client.rpc('tutor_stats') as List; // database not updated yet
     }
+    var outcomes = const <dynamic>[];
+    try {
+      outcomes = await _client.rpc('tutor_outcome_bands') as List; // 0018
+    } on PostgrestException {/* database not updated yet: no results shown */}
+    final outById = {for (final o in outcomes) o['tutor_id']: o};
     final stById = {for (final s in stats) s['tutor_id'] as String: s};
     final pById = {for (final p in profiles) p['tutor_id'] as String: p};
     final sById = {for (final s in scores) s['tutor_id'] as String: s};
@@ -687,6 +692,9 @@ class SupabaseCommunity implements CommunityApi {
         lessons: ((stById[id]?['lessons'] ?? 0) as num).toInt(),
         paused: stById[id]?['paused'] == true,
         upheld: ((stById[id]?['upheld'] ?? 0) as num).toInt(),
+        outcomeReports: ((outById[id]?['reports'] ?? 0) as num).toInt(),
+        outcomeBands: (outById[id]?['bands'] as List?)?.map((e) => (e as num).toInt()).toList(),
+        outcomeConfidence: ((outById[id]?['confidence'] ?? 0) as num).toDouble(),
       );
     }).toList()
       // Higher level first, then the fair score.
@@ -1060,6 +1068,38 @@ class SupabaseCommunity implements CommunityApi {
   @override
   Future<void> answerQuestion(String questionId, int option) => writeOnce.run('answer|$questionId',
       () => _guard(() => _client.rpc('answer_post_question', params: {'p_question': questionId, 'p_option': option})));
+
+  // ---------------------------------------------------------- tutor results
+  @override
+  Future<Map<String, int>> myOutcomes() => _guard(() async {
+        final rows = await _client.from('tutor_outcomes').select('tutor_id, course_code, band')
+            .eq('student_id', _uid).eq('semester', semesterOf(DateTime.now()));
+        return {for (final r in rows) '${r['tutor_id']}|${r['course_code']}': (r['band'] as num).toInt()};
+      });
+
+  @override
+  Future<void> reportOutcome({required String tutorId, required String courseCode, required int band}) =>
+      writeOnce.run('outcome|$tutorId|$courseCode|$band', () => _guard(() => _client.from('tutor_outcomes').upsert({
+            'student_id': _uid,
+            'tutor_id': tutorId,
+            'course_code': normCode(courseCode),
+            'semester': semesterOf(DateTime.now()),
+            'band': band,
+          }, onConflict: 'student_id,tutor_id,course_code,semester')));
+
+  @override
+  Future<void> askProgress(String requestId) =>
+      writeOnce.run('askProgress|$requestId', () => _guard(() => _client.rpc('ask_student_progress', params: {'p_request': requestId})));
+
+  @override
+  Future<DateTime?> semesterEnd() => _guard(() async {
+        final r = await _client.from('app_settings').select('value').eq('key', 'semester_end').maybeSingle();
+        return r == null ? null : DateTime.tryParse(r['value'] as String);
+      });
+
+  @override
+  Future<void> setSemesterEnd(DateTime d) => _guard(() => _client.from('app_settings').upsert(
+      {'key': 'semester_end', 'value': d.toIso8601String().substring(0, 10), 'updated_at': DateTime.now().toUtc().toIso8601String()}));
 
   // ---------------------------------------------------------- grade checks
   @override

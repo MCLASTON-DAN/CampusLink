@@ -917,6 +917,7 @@ class LocalCommunity implements CommunityApi {
   TutorCard _card(String id, String name, String? programme, int? year) {
     final p = Map<String, dynamic>.from((_s['tutorProfiles'] as Map)[id] ?? {});
     final sc = _score(id);
+    final outs = _list('outcomes').where((o) => o['tutor_id'] == id).toList();
     return TutorCard(
       tutorId: id,
       name: name,
@@ -930,6 +931,10 @@ class LocalCommunity implements CommunityApi {
       score: sc.reviews == 0 ? 0 : sc.score,
       reviews: sc.reviews,
       reviewers: sc.reviewers,
+      lessons: _list('requests').where((r) => r['tutor_id'] == id && r['status'] == 'completed').length,
+      outcomeReports: outs.length,
+      outcomeBands: outs.length >= 5 ? [for (var b = 0; b < 5; b++) outs.where((o) => o['band'] == b).length] : null,
+      outcomeConfidence: outcomeConfidence(outs.where((o) => (o['band'] as int) >= 2).length, outs.length),
     );
   }
 
@@ -1414,6 +1419,43 @@ class LocalCommunity implements CommunityApi {
     a.add({'question_id': questionId, 'user_id': _me.id, 'option_index': option});
     _put('postAnswers', a);
     await _save();
+  }
+
+  // ---------------------------------------------------------- tutor results
+  @override
+  Future<Map<String, int>> myOutcomes() {
+    final sem = semesterOf(DateTime.now());
+    return _tick({
+      for (final r in _list('outcomes').where((r) => r['student_id'] == _me.id && r['semester'] == sem))
+        '${r['tutor_id']}|${r['course_code']}': r['band'] as int
+    });
+  }
+
+  @override
+  Future<void> reportOutcome({required String tutorId, required String courseCode, required int band}) async {
+    if (band < 0 || band > 4) throw CommunityException('Pick a band.');
+    final code = normCode(courseCode);
+    final had = _list('requests').any((r) =>
+        r['student_id'] == _me.id && r['tutor_id'] == tutorId && normCode(r['course_code']) == code && r['status'] == 'completed');
+    if (!had) throw CommunityException('Only students who had a confirmed lesson can report.');
+    final sem = semesterOf(DateTime.now());
+    final list = _list('outcomes')
+      ..removeWhere((r) => r['student_id'] == _me.id && r['tutor_id'] == tutorId && r['course_code'] == code && r['semester'] == sem);
+    list.add({'student_id': _me.id, 'tutor_id': tutorId, 'course_code': code, 'semester': sem, 'band': band});
+    _put('outcomes', list);
+    await _save();
+  }
+
+  @override
+  Future<void> askProgress(String requestId) async {}
+
+  DateTime? _semEnd;
+  @override
+  Future<DateTime?> semesterEnd() => _tick(_semEnd);
+  @override
+  Future<void> setSemesterEnd(DateTime d) async {
+    if (!_me.isSuperAdmin) throw CommunityException('Only the super admin sets this.');
+    _semEnd = d;
   }
 
   // ---------------------------------------------------------- grade checks

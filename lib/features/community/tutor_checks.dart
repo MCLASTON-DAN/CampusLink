@@ -53,8 +53,8 @@ Future<void> showTutorLevels(BuildContext context) => showModalBottomSheet(
             for (final (i, t, d) in [
               (1, 'New', 'Grades typed in by the tutor, not checked yet. Found only by searching their name or @username.'),
               (2, 'Grade-checked', 'A lecturer or staff member saw their results slip. Suggested to students for those units.'),
-              (3, 'Experienced', '10+ lessons students confirmed, and a rating of 4.0+ from 3+ reviews.'),
-              (4, 'Expert ✔', '30+ lessons, rating 4.3+ from 5+ students, no upheld reports. Gets the blue tick. It cannot be bought.'),
+              (3, 'Experienced', '10+ confirmed lessons, rating 4.0+, AND results: 5+ students reported, and enough of them scored 60+ that it isn\'t luck.'),
+              (4, 'Expert ✔', '30+ lessons, rating 4.3+ from 5+ students, no upheld reports, and strong results from 10+ students. Gets the blue tick. It cannot be bought.'),
             ])
               ListTile(
                 contentPadding: EdgeInsets.zero,
@@ -266,3 +266,61 @@ class GradeChecksScreen extends ConsumerWidget {
     );
   }
 }
+
+
+/// How a tutor's students did: share in each grade band. Shown only from 5
+/// reports, so one lucky student never looks like "100%".
+class OutcomeBar extends StatelessWidget {
+  const OutcomeBar(this.card, {super.key});
+  final TutorCard card;
+  static const _colors = [Color(0xFFE0245E), Color(0xFFF2780C), Color(0xFFEAB308), Color(0xFF14A44D), Color(0xFF0095F6)];
+  @override
+  Widget build(BuildContext context) {
+    final b = card.outcomeBands;
+    final t = Theme.of(context).textTheme;
+    if (b == null) {
+      return Text(
+          card.outcomeReports == 0
+              ? 'Student results: none reported yet'
+              : 'Student results: ${card.outcomeReports} reported – shown from 5',
+          style: t.bodySmall);
+    }
+    final n = b.fold<int>(0, (a, x) => a + x);
+    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
+      Text('How $n students did after lessons', style: t.labelLarge?.copyWith(fontWeight: FontWeight.w700)),
+      const SizedBox(height: 4),
+      ClipRRect(
+        borderRadius: BorderRadius.circular(6),
+        child: Row(children: [
+          for (var i = 0; i < 5; i++)
+            if (b[i] > 0) Expanded(flex: b[i], child: Container(height: 12, color: _colors[i])),
+        ]),
+      ),
+      const SizedBox(height: 4),
+      Wrap(spacing: 10, children: [
+        for (var i = 0; i < 5; i++)
+          Text('${outcomeBandLabels[i]}: ${(b[i] * 100 / n).round()}%', style: t.bodySmall?.copyWith(color: _colors[i])),
+      ]),
+    ]);
+  }
+}
+
+/// Student: which band did you get in this unit? Returns the band or null.
+Future<int?> pickOutcomeBand(BuildContext context, String courseCode, {int? current}) => showModalBottomSheet<int>(
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: Column(mainAxisSize: MainAxisSize.min, children: [
+          ListTile(
+            title: Text('Your final result in $courseCode', style: const TextStyle(fontWeight: FontWeight.w700)),
+            subtitle: const Text('Coursework and exam together. Only totals are shown – nobody sees yours, not even the tutor.'),
+          ),
+          for (var i = 4; i >= 0; i--)
+            ListTile(
+              leading: Icon(current == i ? Icons.radio_button_checked : Icons.radio_button_off),
+              title: Text(outcomeBandLabels[i]),
+              onTap: () => Navigator.pop(sheet, i),
+            ),
+        ]),
+      ),
+    );

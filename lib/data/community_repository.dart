@@ -183,6 +183,17 @@ abstract class CommunityApi {
   Future<void> reportTutor({required String tutorId, required String reason, required String details});
   /// Staff only: reports per tutor and reason, with percentages.
   Future<List<TutorReportRow>> tutorReportSummary();
+  // ---- tutor results by grade band ----
+  /// My reported bands, keyed '<tutorId>|<UNIT>' for this semester.
+  Future<Map<String, int>> myOutcomes();
+  /// Report the band I got in a unit a tutor helped me with (once per semester; can be corrected).
+  Future<void> reportOutcome({required String tutorId, required String courseCode, required int band});
+  /// Tutor: ask a student how the unit went (once a week per lesson).
+  Future<void> askProgress(String requestId);
+  /// Super admin: when the semester ends (reminders go out 3 and 10 days later).
+  Future<DateTime?> semesterEnd();
+  Future<void> setSemesterEnd(DateTime d);
+
   // ---- tutor grade checks ----
   /// My results slips and their status.
   Future<List<GradeProof>> myGradeProofs();

@@ -6,7 +6,7 @@ import 'package:campuslink/data/local_repository.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
-TutorCard card({bool checked = false, int lessons = 0, int reviews = 0, double score = 0, bool tick = false, int upheld = 0}) =>
+TutorCard card({bool checked = false, int lessons = 0, int reviews = 0, double score = 0, bool tick = false, int upheld = 0, int outs = 0, double conf = 0}) =>
     TutorCard(
       tutorId: 't',
       name: 'T',
@@ -16,6 +16,8 @@ TutorCard card({bool checked = false, int lessons = 0, int reviews = 0, double s
       reviews: reviews,
       score: score,
       upheld: upheld,
+      outcomeReports: outs,
+      outcomeConfidence: conf,
     );
 
 void main() {
@@ -24,8 +26,10 @@ void main() {
     expect(card().suggested, isFalse, reason: 'new tutors are search-only');
     expect(card(checked: true).levelNo, 2);
     expect(card(checked: true).suggested, isTrue);
-    expect(card(checked: true, lessons: 10, reviews: 3, score: 4.1).levelNo, 3);
-    expect(card(checked: true, lessons: 10, reviews: 3, score: 4.1, upheld: 1).levelNo, 2);
+    expect(card(checked: true, lessons: 10, reviews: 3, score: 4.1).levelNo, 2, reason: 'stars alone are not enough');
+    expect(card(checked: true, lessons: 10, reviews: 3, score: 4.1, outs: 6, conf: 0.4).levelNo, 3);
+    expect(card(checked: true, lessons: 10, reviews: 3, score: 4.1, outs: 6, conf: 0.2).levelNo, 2, reason: 'weak results');
+    expect(card(checked: true, lessons: 10, reviews: 3, score: 4.1, outs: 6, conf: 0.4, upheld: 1).levelNo, 2);
     expect(card(lessons: 50, reviews: 20, score: 4.9).levelNo, 1, reason: 'lessons never replace the grade check');
     expect(card(checked: true, tick: true).levelNo, 4);
   });
