@@ -819,6 +819,11 @@ class SupabaseCommunity implements CommunityApi {
           }));
 
   // ------------------------------------------------------------- pictures
+  /// Every upload gets a new random name and is never changed afterwards, so
+  /// phones and browsers may keep pictures for a year instead of re-checking
+  /// with the server (in Ireland) every hour.
+  static const _oneYear = '31536000';
+
   @override
   Future<String> uploadImage(Uint8List bytes, {required String extension}) => _guard(() async {
         if (bytes.length > 1024 * 1024) throw CommunityException('Pictures must be under 1 MB');
@@ -826,7 +831,7 @@ class SupabaseCommunity implements CommunityApi {
         final mime = ext == 'png' ? 'image/png' : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
         final path = '$_uid/${_uuid.v4()}.${ext == 'jpg' ? 'jpeg' : ext}';
         try {
-          await _client.storage.from('campus-media').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime, upsert: false));
+          await _client.storage.from('campus-media').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime, upsert: false, cacheControl: _oneYear));
         } on StorageException catch (e) {
           throw CommunityException(
               e.message.contains('security') || e.statusCode == '403' ? 'Only office holders can upload pictures.' : e.message);
@@ -872,7 +877,7 @@ class SupabaseCommunity implements CommunityApi {
         final path = '$_uid/${_uuid.v4()}.jpeg';
         await _client.storage
             .from('avatars')
-            .uploadBinary(path, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false));
+            .uploadBinary(path, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false, cacheControl: _oneYear));
         return _client.storage.from('avatars').getPublicUrl(path);
       });
 

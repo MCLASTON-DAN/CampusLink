@@ -266,7 +266,9 @@ class _ProfileHeader extends ConsumerWidget {
 
   Future<void> _changePhoto(BuildContext context, WidgetRef ref) async {
     try {
-      final bytes = await pickAndShrinkImage(maxBytes: 180 * 1024);
+      // Shown as a small circle: 256 px is sharp even on big screens and is
+      // about 20 KB instead of up to 180 KB.
+      final bytes = await pickAndShrinkImage(maxBytes: 60 * 1024, maxSide: 256);
       if (bytes == null) return;
       final url = await ref.read(communityProvider).uploadAvatar(bytes);
       await ref.read(repositoryProvider).updateProfile(user.copyWith(avatarPath: url));

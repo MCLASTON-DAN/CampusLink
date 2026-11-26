@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 import 'offline_cache.dart';
@@ -18,7 +19,16 @@ final offlineCacheProvider = Provider<OfflineCache?>((ref) => null);
 /// Empty means everything on screen is fresh.
 final offlineSinceProvider = StateProvider<Map<String, DateTime>>((ref) => const {});
 
-/// Load fresh data; save a copy; if loading fails, show the saved copy.
+/// When each list was last fetched from the server (this app session).
+final _lastFresh = <String, DateTime>{};
+
+/// Lists whose fresh copy was just saved by a background refresh; the very
+/// next run shows it without asking the server again.
+final _swapped = <String>{};
+
+/// Show the saved copy straight away, fetch fresh data in the background and
+/// swap it in when it arrives. With no saved copy: wait for the server. If
+/// the server can't be reached, keep showing the saved copy (and say so).
 Future<List<T>> _cached<T>(
   Ref ref,
   String key,
@@ -35,10 +45,42 @@ Future<List<T>> _cached<T>(
     if (next.length != n.state.length || next[key] != n.state[key]) n.state = next;
   }
 
+  final slot = '$who|$key';
+  final saved = (cache != null && who != null) ? cache.load(who, key) : null;
+  final last = _lastFresh[slot];
+  final age = last == null ? null : DateTime.now().difference(last);
+  // This run comes from the background swap below: the saved copy IS fresh.
+  if (saved != null && _swapped.remove(slot)) {
+    return [for (final r in saved.$1) fromMap(r)];
+  }
+  // Opening the app, or a screen not loaded for 10 minutes: show the saved
+  // copy at once. A reload soon after (e.g. right after posting) waits for
+  // the server instead, so new things show immediately and correctly.
+  if (saved != null && (age == null || age > const Duration(minutes: 10))) {
+    var alive = true;
+    ref.onDispose(() => alive = false);
+    unawaited(() async {
+      try {
+        final fresh = await fetch();
+        await cache!.save(who!, key, [for (final x in fresh) toMap(x)]);
+        _lastFresh[slot] = DateTime.now();
+        if (alive) {
+          mark(null);
+          _swapped.add(slot);
+          ref.invalidateSelf();
+        }
+      } catch (_) {
+        if (alive) mark(saved.$2);
+      }
+    }());
+    return [for (final r in saved.$1) fromMap(r)];
+  }
+
   try {
     final fresh = await fetch();
     if (cache != null && who != null) {
       await cache.save(who, key, [for (final x in fresh) toMap(x)]);
+      _lastFresh[slot] = DateTime.now();
       mark(null);
     }
     return fresh;

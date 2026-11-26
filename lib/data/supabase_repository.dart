@@ -39,6 +39,16 @@ class SupabaseRepository implements CampusRepository {
         await _client.auth.onAuthStateChange.firstWhere((s) => s.session != null).timeout(const Duration(seconds: 8));
       } catch (_) {/* sign-in failed or slow: show the sign-in page */}
     }
+    // Seen this person before on this device? Open straight away with the
+    // saved profile and refresh it quietly. Otherwise wait (up to 8 s).
+    final u = _client.auth.currentUser;
+    final saved = u == null ? null : _cache?.load(u.id, 'profile');
+    if (u != null && saved != null && saved.$1.isNotEmpty) {
+      _user = Profile.fromMap(saved.$1.first);
+      _userCtrl.add(_user);
+      unawaited(_refreshProfile());
+      return;
+    }
     try {
       await _refreshProfile().timeout(const Duration(seconds: 8));
     } catch (_) {}
@@ -69,7 +79,12 @@ class SupabaseRepository implements CampusRepository {
     }
   }
 
-  Future<void> _refreshProfile() async {
+  /// Start-up fires several sign-in events at once; they share one load
+  /// instead of fetching the same profile three times.
+  Future<void>? _profileLoading;
+  Future<void> _refreshProfile() => _profileLoading ??= _loadProfile().whenComplete(() => _profileLoading = null);
+
+  Future<void> _loadProfile() async {
     final u = _client.auth.currentUser;
     if (u == null) {
       _user = null;
@@ -79,10 +94,16 @@ class SupabaseRepository implements CampusRepository {
     try {
       // Named columns, never select(*): the student number is private (0023)
       // and comes from my_private_profile(), which only returns your own.
-      final row = await _client.from('profiles').select(profileColumns).eq('id', u.id).maybeSingle();
-      if (row != null) row['student_number'] = await _myStudentNumber();
+      // The three parts load side by side: one wait for the server, not three.
       // Badge and office come from the public view (they are worked out, not stored).
-      final pub = await _client.from('public_profiles').select('badge, office_title, office_name').eq('id', u.id).maybeSingle();
+      final parts = await Future.wait<Object?>([
+        _client.from('profiles').select(profileColumns).eq('id', u.id).maybeSingle(),
+        _myStudentNumber(),
+        _client.from('public_profiles').select('badge, office_title, office_name').eq('id', u.id).maybeSingle(),
+      ]);
+      final row = parts[0] as Map<String, dynamic>?;
+      if (row != null) row['student_number'] = parts[1] as String?;
+      final pub = parts[2] as Map<String, dynamic>?;
       if (row == null) {
         _user = Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '');
       } else {
