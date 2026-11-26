@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import 'office_access_panel.dart';
 import '../community/map_screen.dart';
 import '../requests/new_request_sheet.dart';
 
@@ -50,15 +51,18 @@ class OfficeDetailScreen extends ConsumerWidget {
                     onPressed: () => showOfficeSheet(context, o),
                     icon: const Icon(Icons.info_outline),
                     label: const Text('Hours, what to bring, directions')),
-                if (ref.watch(currentUserProvider).valueOrNull?.isStaff ?? false)
+                if ((ref.watch(currentUserProvider).valueOrNull?.isSuperAdmin ?? false) ||
+                    (ref.watch(myHandledOfficesProvider).valueOrNull?.contains(o.id) ?? false))
                   OutlinedButton.icon(
                       onPressed: () async {
                         await context.push('/directory/${o.id}/edit');
                         ref.invalidate(officesProvider);
                       },
                       icon: const Icon(Icons.edit),
-                      label: const Text('Edit (staff)')),
+                      label: const Text('Edit office')),
               ]),
+              const SizedBox(height: 12),
+              OfficeAccessPanel(office: o),
               const SizedBox(height: 16),
               Card(
                 child: Column(

@@ -246,15 +246,38 @@ class SupabaseRepository implements CampusRepository {
   }
 
   @override
-  Future<void> moveRequest(String requestId, String? officeId, String officeName) =>
-      writeOnce.run('moveRequest|$requestId|$officeId', () async {
-        await _client.from('help_requests').update({'office_id': officeId}).eq('id', requestId);
-        await _client.from('help_request_updates').insert({
-          'request_id': requestId,
-          'author_id': _uid,
-          'message': 'Sent to $officeName.',
-        });
-      });
+  Future<void> moveRequest(String requestId, String? officeId, String officeName) => writeOnce.run(
+      'moveRequest|$requestId|$officeId',
+      // One database step that checks who may move it and logs the move.
+      () => _client.rpc('move_help_request', params: {'p_request': requestId, 'p_office': officeId}));
+
+  @override
+  Future<Set<String>> myHandledOffices() async {
+    if (_uid.isEmpty) return {};
+    try {
+      final rows = await _client.from('help_office_staff').select('office_id').eq('user_id', _uid);
+      return {for (final r in rows) r['office_id'] as String};
+    } on PostgrestException {
+      return {}; // database not updated yet (0016)
+    }
+  }
+
+  @override
+  Future<List<({String id, String name})>> officeHandlers(String officeId) async {
+    final rows = await _client.from('help_office_staff').select('user_id').eq('office_id', officeId);
+    final ids = [for (final r in rows) r['user_id'] as String];
+    if (ids.isEmpty) return [];
+    final people = await _client.from('public_profiles').select('id, full_name').inFilter('id', ids);
+    return [for (final p in people) (id: p['id'] as String, name: (p['full_name'] ?? '') as String)];
+  }
+
+  @override
+  Future<void> setOfficeHandler(String officeId, String userId, {required bool add}) => writeOnce.run(
+      'officeHandler|$officeId|$userId|$add',
+      () => _client.rpc('set_office_handler', params: {'p_office': officeId, 'p_user': userId, 'p_add': add}));
+
+  @override
+  Future<void> reloadMe() => _refreshProfile();
 
   @override
   Future<void> addRequestUpdate(RequestUpdate u, {RequestStatus? newStatus}) =>

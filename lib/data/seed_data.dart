@@ -63,6 +63,7 @@ class SeedData {
     const HelpOffice(
       id: 'off-wellness',
       name: 'Counselling & Wellness',
+      confidential: true,
       description: 'Confidential counselling, mental health support, peer support.',
       category: 'health',
       location: "Students' Centre, Room S2",

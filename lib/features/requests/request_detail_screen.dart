@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
+import '../../data/access.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
@@ -114,6 +115,14 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
           if (r == null) return const EmptyState(icon: Icons.error_outline, title: 'Request not found');
           final office = offices.where((o) => o.id == r.officeId).firstOrNull;
           final canClose = r.status != RequestStatus.closed && r.status != RequestStatus.resolved;
+          // Acting as the office: same rule as the database (access.dart / 0016).
+          final asOffice = canHandleRequest(
+            me: user,
+            officeId: r.officeId,
+            myOffices: ref.watch(myHandledOfficesProvider).valueOrNull ?? const {},
+            confidential: office?.confidential ?? false,
+          );
+          final isMine = user?.id == r.studentId;
 
           return Column(
             children: [
@@ -142,7 +151,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                 child: Text('${office?.name ?? 'General desk'} · opened ${friendlyDate(r.createdAt)}',
                                     style: Theme.of(context).textTheme.bodySmall),
                               ),
-                              if (offices.isNotEmpty && canClose && ((user?.isStaff ?? false) || user?.id == r.studentId))
+                              if (offices.isNotEmpty && canClose && (asOffice || isMine))
                                 TextButton.icon(
                                   onPressed: () => _move(r, offices),
                                   icon: const Icon(Icons.swap_horiz_rounded, size: 18),
@@ -165,7 +174,11 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                             _TimelineTile(
                               update: ups[i],
                               isLast: i == ups.length - 1,
-                              mine: ups[i].authorId == user?.id,
+                              who: ups[i].authorId == user?.id
+                                  ? 'You'
+                                  : ups[i].authorId == r.studentId
+                                      ? 'Student'
+                                      : (office?.name ?? 'Office'),
                             ),
                         ],
                       ),
@@ -180,7 +193,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                     padding: const EdgeInsets.fromLTRB(16, 8, 16, 12),
                     child: Column(
                       children: [
-                        if (user?.isStaff == true)
+                        if (asOffice)
                           Wrap(
                             spacing: 8,
                             children: [
@@ -208,7 +221,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                   ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
                                   : const Icon(Icons.send_rounded),
                             ),
-                            if (canClose && user?.isStaff != true)
+                            if (canClose && isMine && !asOffice)
                               IconButton.outlined(
                                 tooltip: 'Close it: my problem is sorted',
                                 onPressed: _sending ? null : () => _send(status: RequestStatus.closed),
@@ -265,10 +278,10 @@ class _ProgressBar extends StatelessWidget {
 }
 
 class _TimelineTile extends StatelessWidget {
-  const _TimelineTile({required this.update, required this.isLast, required this.mine});
+  const _TimelineTile({required this.update, required this.isLast, required this.who});
   final RequestUpdate update;
   final bool isLast;
-  final bool mine;
+  final String who;
 
   @override
   Widget build(BuildContext context) {
@@ -294,7 +307,7 @@ class _TimelineTile extends StatelessWidget {
                 crossAxisAlignment: CrossAxisAlignment.start,
                 children: [
                   Row(children: [
-                    Text(mine ? 'You' : 'Support team', style: const TextStyle(fontWeight: FontWeight.w700)),
+                    Text(who, style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(width: 8),
                     Text(friendlyDate(update.createdAt), style: Theme.of(context).textTheme.bodySmall),
                   ]),

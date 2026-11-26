@@ -219,6 +219,9 @@ class HelpOffice {
   final double? lat;
   final double? lng;
 
+  /// Private office (e.g. Counselling): even the super admin can't read its requests.
+  final bool confidential;
+
   const HelpOffice({
     required this.id,
     required this.name,
@@ -240,6 +243,7 @@ class HelpOffice {
     this.campusId,
     this.lat,
     this.lng,
+    this.confidential = false,
   });
 
   bool get hasLocation => lat != null && lng != null;
@@ -258,6 +262,7 @@ class HelpOffice {
     String? campusId,
     double? lat,
     double? lng,
+    bool? confidential,
     DateTime? lastVerifiedAt,
   }) =>
       HelpOffice(
@@ -281,6 +286,7 @@ class HelpOffice {
         campusId: campusId ?? this.campusId,
         lat: lat ?? this.lat,
         lng: lng ?? this.lng,
+        confidential: confidential ?? this.confidential,
       );
 
   factory HelpOffice.fromMap(Map<String, dynamic> m) => HelpOffice(
@@ -304,9 +310,11 @@ class HelpOffice {
         campusId: m['campus_id'],
         lat: (m['lat'] as num?)?.toDouble(),
         lng: (m['lng'] as num?)?.toDouble(),
+        confidential: m['confidential'] == true,
       );
 
   Map<String, dynamic> toMap() => {
+        'confidential': confidential,
         'id': id,
         'name': name,
         'description': description,

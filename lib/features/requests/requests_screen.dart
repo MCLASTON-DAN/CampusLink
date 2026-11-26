@@ -25,7 +25,7 @@ class RequestsScreen extends ConsumerWidget {
     final user = ref.watch(currentUserProvider).valueOrNull;
 
     return Scaffold(
-      appBar: AppBar(title: Text(user?.isStaff == true ? 'All help requests' : 'My help requests')),
+      appBar: AppBar(title: const Text('Help requests')),
       floatingActionButton: FloatingActionButton.extended(
         onPressed: () => showNewRequestSheet(context, ref),
         icon: const Icon(Icons.add_rounded),
@@ -59,7 +59,13 @@ class RequestsScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
-                for (final r in list) ...[
+                for (final (i, r) in [
+                  ...list.where((r) => r.studentId == user?.id),
+                  ...list.where((r) => r.studentId != user?.id),
+                ].indexed) ...[
+                  if (i == 0 && r.studentId == user?.id) const SectionHeader('Sent by me'),
+                  if (r.studentId != user?.id && (i == 0 || list.where((x) => x.studentId == user?.id).length == i))
+                    const SectionHeader('For my office'),
                   Card(
                     child: ListTile(
                       onTap: () => context.go('/requests/${r.id}'),

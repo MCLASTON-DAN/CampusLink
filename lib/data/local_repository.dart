@@ -5,6 +5,7 @@ import 'package:shared_preferences/shared_preferences.dart';
 import 'package:uuid/uuid.dart';
 
 import 'community_local.dart';
+import 'access.dart';
 import 'models.dart';
 import 'repository.dart';
 import 'seed_data.dart';
@@ -176,11 +177,39 @@ class LocalRepository implements CampusRepository {
   // ---- requests ----
   @override
   Future<List<HelpRequest>> myRequests() {
-    final uid = _user?.id;
-    final list = _requests.where((r) => _user?.isStaff == true || r.studentId == uid).toList()
+    // Same rule as the database (0016), via access.dart.
+    final mine = _handled();
+    final list = _requests
+        .where((r) => canSeeRequest(me: _user, r: r, myOffices: mine, confidential: _confidential(r.officeId)))
+        .toList()
       ..sort((a, b) => b.updatedAt.compareTo(a.updatedAt));
     return _tick(list);
   }
+
+  // Demo office handlers: office id -> user ids.
+  final _officeStaff = <String, Set<String>>{};
+  Set<String> _handled() => {for (final e in _officeStaff.entries) if (e.value.contains(_user?.id)) e.key};
+  bool _confidential(String? officeId) =>
+      officeId != null && (community.mergeOffices(SeedData.offices).where((o) => o.id == officeId).firstOrNull?.confidential ?? false);
+
+  @override
+  Future<Set<String>> myHandledOffices() => _tick(_handled());
+
+  @override
+  Future<List<({String id, String name})>> officeHandlers(String officeId) => _tick([
+        for (final id in _officeStaff[officeId] ?? const <String>{})
+          (id: id, name: id.replaceFirst('local-', '').split('@').first)
+      ]);
+
+  @override
+  Future<void> setOfficeHandler(String officeId, String userId, {required bool add}) async {
+    if (_user?.isSuperAdmin != true) throw Exception('Only the super admin chooses who handles an office.');
+    final set = _officeStaff.putIfAbsent(officeId, () => <String>{});
+    add ? set.add(userId) : set.remove(userId);
+  }
+
+  @override
+  Future<void> reloadMe() async {}
 
   @override
   Future<List<RequestUpdate>> requestUpdates(String requestId) =>
@@ -192,12 +221,16 @@ class LocalRepository implements CampusRepository {
     final i = _requests.indexWhere((x) => x.id == requestId);
     if (i < 0) return;
     final o = _requests[i];
+    final asOffice = canHandleRequest(me: _user, officeId: o.officeId, myOffices: _handled(), confidential: _confidential(o.officeId));
+    final asStudent = o.studentId == _user?.id && (o.status == RequestStatus.open || o.status == RequestStatus.inProgress);
+    if (!asOffice && !asStudent) throw Exception('You cannot move this request.');
     _requests[i] = HelpRequest(
         id: o.id, studentId: o.studentId, officeId: officeId, title: o.title, description: o.description,
         priority: o.priority, status: o.status, createdAt: o.createdAt, updatedAt: DateTime.now());
     _updates.add(RequestUpdate(
         id: _uuid.v4(), requestId: requestId, authorId: _user?.id, message: 'Sent to $officeName.', createdAt: DateTime.now()));
   }
+
 
   @override
   Future<HelpRequest> createRequest(HelpRequest r) async {

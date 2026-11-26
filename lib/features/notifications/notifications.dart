@@ -69,6 +69,13 @@ class _HostState extends ConsumerState<NotificationHost> {
     _sub = ref.read(communityProvider).newNotifications().listen((n) {
       ref.invalidate(notificationsProvider);
       if (n.kind == 'course') ref.invalidate(courseNoticesProvider);
+      if (n.kind == 'access') {
+        // My role or office changed: reload who I am and what I may see, now.
+        ref.read(repositoryProvider).reloadMe();
+        ref.invalidate(myHandledOfficesProvider);
+        ref.invalidate(myMembershipsProvider);
+        ref.invalidate(myRequestsProvider);
+      }
       if (ref.read(deviceNotifyProvider)) {
         deviceNotifyShow(n.title, n.body, link: n.link);
       } else if (mounted) {

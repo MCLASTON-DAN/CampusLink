@@ -34,9 +34,21 @@ abstract class CampusRepository {
   Future<List<RequestUpdate>> requestUpdates(String requestId);
   Future<HelpRequest> createRequest(HelpRequest r);
 
-  /// Send a request to another office (null = general desk). Staff, or the
-  /// student while it is still open. Adds a line to its timeline.
+  /// Send a request to another office (null = general desk): the student while
+  /// it is open, or whoever handles it now. Adds a line to its timeline.
   Future<void> moveRequest(String requestId, String? officeId, String officeName);
+
+  /// Ids of the help offices I handle requests for.
+  Future<Set<String>> myHandledOffices();
+
+  /// Who handles an office's requests (super admin and that office's handlers see this).
+  Future<List<({String id, String name})>> officeHandlers(String officeId);
+
+  /// Super admin: add or remove a handler. They are notified at once.
+  Future<void> setOfficeHandler(String officeId, String userId, {required bool add});
+
+  /// Reload my own profile (after my role or access changed).
+  Future<void> reloadMe();
   Future<void> addRequestUpdate(RequestUpdate u, {RequestStatus? newStatus});
 
   // ---- study ----

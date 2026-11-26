@@ -76,6 +76,9 @@ final announcementsProvider = FutureProvider.autoDispose((ref) => _cached(
 
 final officesProvider = FutureProvider((ref) => _repo(ref).offices());
 
+/// Help offices I handle requests for (empty for most people).
+final myHandledOfficesProvider = FutureProvider((ref) => _repo(ref).myHandledOffices());
+
 final myRequestsProvider =
     FutureProvider.autoDispose((ref) => _repo(ref).myRequests());
 

@@ -494,6 +494,8 @@ class SupabaseCommunity implements CommunityApi {
         'campus_id': o.campusId,
         'lat': o.lat,
         'lng': o.lng,
+        // Only the super admin may change this; the database enforces it too.
+        if (_me()?.isSuperAdmin ?? false) 'confidential': o.confidential,
       }).eq('id', o.id));
 
   // ------------------------------------------------------------ lost & found
