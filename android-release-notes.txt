@@ -1,0 +1,4 @@
+Updates now download inside the app, with a progress bar
+Reset your password with a 6-digit code
+Tutors can show their price, and share contact details safely
+Add your classes, exams and events to Google Calendar

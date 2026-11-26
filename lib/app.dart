@@ -24,6 +24,7 @@ import 'features/community/insights_screen.dart';
 import 'features/admin/admin_dashboard.dart';
 import 'features/notifications/notifications.dart';
 import 'features/update/app_update.dart';
+import 'features/update/app_updates_admin.dart';
 import 'features/community/events_screens.dart';
 import 'features/community/map_screen.dart';
 import 'features/community/more_screens.dart';
@@ -149,6 +150,8 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/tutors/offer', builder: (_, __) => const TutorOfferScreen()),
           GoRoute(path: '/account/calendar', builder: (_, __) => const CalendarSyncScreen()),
           GoRoute(path: '/admin/email-rules', builder: (_, __) => const EmailRulesAdminScreen()),
+          GoRoute(path: '/admin/app-updates', builder: (_, __) => const AppUpdatesAdminScreen()),
+          GoRoute(path: '/update', builder: (_, __) => const UpdateDetailsScreen()),
           GoRoute(path: '/moderation', builder: (_, __) => const ModerationLogScreen()),
           GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
           GoRoute(path: '/campuses', builder: (_, __) => const CampusesScreen()),

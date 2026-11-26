@@ -3,6 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
+import 'features/update/app_update.dart';
 import 'app.dart';
 import 'core/config.dart';
 import 'data/local_repository.dart';
@@ -23,6 +24,9 @@ Future<void> main() async {
       await Supabase.initialize(
         url: AppConfig.supabaseUrl,
         publishableKey: AppConfig.supabaseAnonKey,
+        // Tells the database which app version is asking, so it can require
+        // updates (0025_app_update_gate.sql).
+        headers: appVersionHeaders(),
       );
       final live = SupabaseRepository(Supabase.instance.client, cache: OfflineCache(prefs));
       await live.ready; // know who is signed in before the first screen

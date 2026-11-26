@@ -17,6 +17,7 @@ import '../../core/image_tools.dart';
 import '../../widgets/badge.dart';
 import '../../widgets/media.dart';
 import '../account/password_screens.dart';
+import '../update/app_update.dart' show updateState, UpdateLevel;
 
 class ProfileScreen extends ConsumerWidget {
   const ProfileScreen({super.key});
@@ -91,6 +92,17 @@ class ProfileScreen extends ConsumerWidget {
             ActionTile(icon: Icons.assignment_ind_rounded, title: 'My lessons', subtitle: 'Tutor requests and reviews', color: const Color(0xFF7C3AED), onTap: () => context.push('/tutors/mine')),
             ActionTile(icon: Icons.support_agent_rounded, title: 'My help requests', subtitle: 'Track what you asked', color: const Color(0xFFF97316), onTap: () => context.push('/requests')),
             ActionTile(icon: Icons.gavel_rounded, title: 'Public record', subtitle: 'Removals and office changes, with reasons', color: const Color(0xFF64748B), onTap: () => context.push('/moderation')),
+            ValueListenableBuilder(
+              valueListenable: updateState,
+              builder: (context, u, _) => u.level == UpdateLevel.none || u.release == null
+                  ? const SizedBox.shrink()
+                  : ActionTile(
+                      icon: Icons.system_update_rounded,
+                      title: 'Update available',
+                      subtitle: 'Version ${u.release!.version} is ready to install',
+                      color: const Color(0xFF16A34A),
+                      onTap: () => context.push('/update')),
+            ),
             ActionTile(icon: Icons.notifications_rounded, title: 'Notifications', subtitle: 'Inbox and pop-up settings', color: const Color(0xFFDB2777), onTap: () => context.push('/notifications')),
             ActionTile(icon: Icons.event_available_rounded, title: 'My calendar', subtitle: 'Classes, exams and events in Google Calendar', color: const Color(0xFF0D9488), onTap: () => context.push('/account/calendar')),
             ActionTile(icon: Icons.password_rounded, title: 'Password', subtitle: 'Create or change your password', color: const Color(0xFF334155), onTap: () => openPasswordSettings(context)),
@@ -129,6 +141,8 @@ class ProfileScreen extends ConsumerWidget {
                 ActionTile(icon: Icons.assignment_ind_rounded, title: 'Lecturers & units', subtitle: 'Who can message which unit', color: const Color(0xFFF97316), onTap: () => context.push('/courses/lecturers')),
               if (user.isStaff)
                 ActionTile(icon: Icons.location_city_rounded, title: 'Campuses & offices', subtitle: 'Keep places and hours correct', color: const Color(0xFF6366F1), onTap: () => context.push('/campuses')),
+              if (user.isSuperAdmin)
+                ActionTile(icon: Icons.system_update_rounded, title: 'App updates', subtitle: 'Require everyone to update', color: const Color(0xFF16A34A), onTap: () => context.push('/admin/app-updates')),
               if (user.isSuperAdmin)
                 ActionTile(icon: Icons.alternate_email_rounded, title: 'Who can join', subtitle: 'School email types and exceptions', color: const Color(0xFFDC2626), onTap: () => context.push('/admin/email-rules')),
               if (user.isSuperAdmin)

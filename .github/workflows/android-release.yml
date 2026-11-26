@@ -67,8 +67,21 @@ jobs:
           fi
           cp build/app/outputs/flutter-apk/app-release.apk campuslink.apk
           ls -lh campuslink.apk
-          # The app reads this to offer "Update available".
-          echo "{\"build\": $BUILD, \"version\": \"1.0.$BUILD\", \"url\": \"https://github.com/${{ github.repository }}/releases/download/android-latest/campuslink.apk\"}" > version.json
+          # The app reads this to offer the update: the SHA-256 lets the phone
+          # check it downloaded the genuine file; notes fill "What's new".
+          BUILD=$BUILD URL="https://github.com/${{ github.repository }}/releases/download/android-latest/campuslink.apk" \
+          python3 - <<'PY'
+          import hashlib, json, os
+          apk = open('campuslink.apk', 'rb').read()
+          try:
+              notes = [l.strip() for l in open('android-release-notes.txt', encoding='utf-8') if l.strip()][:5]
+          except FileNotFoundError:
+              notes = []
+          b = int(os.environ['BUILD'])
+          json.dump({'build': b, 'version': f'1.0.{b}', 'url': os.environ['URL'],
+                     'sha256': hashlib.sha256(apk).hexdigest(), 'size': len(apk),
+                     'notes': notes or ['Improvements and fixes.']}, open('version.json', 'w'))
+          PY
           cat version.json
 
       - name: Publish to the "android-latest" release

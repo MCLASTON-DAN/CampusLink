@@ -42,6 +42,7 @@ dependencies:
   mobile_scanner: ^7.5.0
   timezone: ^0.10.1
   cached_network_image: ^4.0.7
+  ota_update: ^7.1.0
 
 dev_dependencies:
   flutter_test:
