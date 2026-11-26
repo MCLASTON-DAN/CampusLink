@@ -1,5 +1,7 @@
 import 'community_repository.dart';
 import 'exams.dart';
+import 'group_chat.dart';
+export 'group_chat.dart';
 export 'exams.dart';
 import 'models.dart';
 
@@ -81,6 +83,27 @@ abstract class CampusRepository {
   Future<void> replaceTimetable(List<TimetableEntry> entries);
   Future<void> addTimetableEntry(TimetableEntry e);
   Future<void> deleteTimetableEntry(String id);
+
+  // ---- study group invites and chat ----
+  /// Ask to join an invite-only group (the owner approves).
+  Future<void> requestToJoinGroup(String groupId, String? message);
+  /// Groups I have asked to join and am waiting on.
+  Future<Set<String>> myPendingGroupRequests();
+  /// Owner: who is waiting to join.
+  Future<List<GroupJoinRequest>> groupJoinRequests(String groupId);
+  Future<void> decideGroupRequest(String requestId, {required bool approve});
+  Future<void> setGroupPrivacy(String groupId, String privacy);
+  Future<List<GroupMember>> groupMembers(String groupId);
+  /// Latest messages, oldest first. Members only.
+  Future<List<GroupMessage>> groupMessages(String groupId);
+  /// New and changed messages as they happen.
+  Stream<GroupMessage> groupMessageChanges(String groupId);
+  Future<void> sendGroupMessage(String groupId, String body, {String? replyTo, List<String> mentions, bool mentionAll});
+  Future<void> deleteGroupMessage(String messageId);
+  Future<void> pinGroupMessage(String messageId, {required bool pin});
+  /// Names of members typing right now (private channel, members only).
+  Stream<Set<String>> typingIn(String groupId);
+  void sendTyping(String groupId);
 
   // ---- exams (real dates) ----
   /// Official papers for my units + my own entries, soonest first.

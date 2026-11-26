@@ -6,6 +6,7 @@ import 'package:go_router/go_router.dart';
 import 'core/config.dart';
 import 'core/theme.dart';
 import 'data/providers.dart';
+import 'features/study/group_chat_screen.dart';
 import 'features/timetable/exams_screen.dart';
 import 'features/community/tutor_checks.dart';
 import 'features/timetable/class_reminders_sync.dart';
@@ -114,6 +115,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/engage', builder: (_, __) => const EngageScreen()),
           GoRoute(path: '/timetable', builder: (_, __) => const TimetableScreen()),
           GoRoute(path: '/exams', builder: (_, __) => const ExamsScreen()),
+          GoRoute(path: '/groups/:id', builder: (_, st) => GroupChatScreen(groupId: st.pathParameters['id']!)),
           GoRoute(path: '/community', builder: (_, __) => const CommunityHubScreen()),
           GoRoute(path: '/news', builder: (_, __) => const NewsScreen()),
           GoRoute(path: '/news/new', builder: (_, __) => const ComposePostScreen()),

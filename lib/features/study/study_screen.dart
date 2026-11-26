@@ -1,5 +1,6 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 import 'package:uuid/uuid.dart';
 
 import '../../core/theme.dart';
@@ -62,9 +63,10 @@ class _StudyScreenState extends ConsumerState<StudyScreen> with SingleTickerProv
     final desc = TextEditingController();
     final time = TextEditingController();
     final place = TextEditingController();
+    var invite = false;
     final ok = await showDialog<bool>(
       context: context,
-      builder: (ctx) => AlertDialog(
+      builder: (ctx) => StatefulBuilder(builder: (ctx, setS) => AlertDialog(
         title: const Text('Start a study group'),
         content: SizedBox(
           width: 420,
@@ -80,13 +82,20 @@ class _StudyScreenState extends ConsumerState<StudyScreen> with SingleTickerProv
               const SizedBox(width: 10),
               Expanded(child: TextField(controller: place, decoration: const InputDecoration(labelText: 'Where'))),
             ]),
+            SwitchListTile(
+              contentPadding: EdgeInsets.zero,
+              title: const Text('Invite only'),
+              subtitle: const Text('People ask to join and you approve them.'),
+              value: invite,
+              onChanged: (v) => setS(() => invite = v),
+            ),
           ]),
         ),
         actions: [
           TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
           FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Create')),
         ],
-      ),
+      )),
     );
     if (ok != true || name.text.trim().isEmpty) return;
     final uid = ref.read(repositoryProvider).currentUserSync?.id;
@@ -99,6 +108,7 @@ class _StudyScreenState extends ConsumerState<StudyScreen> with SingleTickerProv
           location: place.text.trim(),
           ownerId: uid,
           memberIds: uid == null ? [] : [uid],
+          privacy: invite ? 'invite' : 'open',
         ));
     ref.invalidate(studyGroupsProvider);
     if (mounted) {
@@ -182,6 +192,7 @@ class _GroupsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(studyGroupsProvider);
     final uid = ref.watch(currentUserProvider).valueOrNull?.id;
+    final pending = ref.watch(_pendingProvider).valueOrNull ?? const <String>{};
     return AsyncBody(
       value: data,
       onRetry: () => ref.invalidate(studyGroupsProvider),
@@ -209,6 +220,11 @@ class _GroupsTab extends ConsumerWidget {
                   children: [
                     Row(children: [
                       StatusChip(g.courseCode, color: Brand.indigo),
+                      if (g.inviteOnly) ...[
+                        const SizedBox(width: 6),
+                        const Icon(Icons.lock_outline_rounded, size: 16),
+                        const Text(' Invite only', style: TextStyle(fontSize: 12)),
+                      ],
                       const Spacer(),
                       Text('${g.memberIds.length}/${g.maxMembers} members', style: Theme.of(context).textTheme.bodySmall),
                     ]),
@@ -227,21 +243,7 @@ class _GroupsTab extends ConsumerWidget {
                       const Icon(Icons.place_outlined, size: 16),
                       const SizedBox(width: 4),
                       Expanded(child: Text(g.location ?? 'TBD', overflow: TextOverflow.ellipsis)),
-                      joined
-                          ? OutlinedButton(
-                              onPressed: () async {
-                                await ref.read(repositoryProvider).toggleGroupMembership(g.id, false);
-                                ref.invalidate(studyGroupsProvider);
-                              },
-                              child: const Text('Leave'))
-                          : FilledButton(
-                              onPressed: g.memberIds.length >= g.maxMembers
-                                  ? null
-                                  : () async {
-                                      await ref.read(repositoryProvider).toggleGroupMembership(g.id, true);
-                                      ref.invalidate(studyGroupsProvider);
-                                    },
-                              child: const Text('Join')),
+                      _GroupAction(group: g, joined: joined, pending: pending.contains(g.id)),
                     ]),
                   ],
                 ),
@@ -250,6 +252,65 @@ class _GroupsTab extends ConsumerWidget {
           },
         );
       },
+    );
+  }
+}
+
+
+final _pendingProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).myPendingGroupRequests());
+
+/// Join (open), Ask to join (invite only), Requested, or Open chat (member).
+class _GroupAction extends ConsumerWidget {
+  const _GroupAction({required this.group, required this.joined, required this.pending});
+  final StudyGroup group;
+  final bool joined, pending;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final repo = ref.read(repositoryProvider);
+    if (joined) {
+      return FilledButton.tonalIcon(
+        onPressed: () => context.push('/groups/${group.id}'),
+        icon: const Icon(Icons.forum_rounded, size: 18),
+        label: const Text('Open'),
+      );
+    }
+    if (pending) return const OutlinedButton(onPressed: null, child: Text('Requested'));
+    final full = group.memberIds.length >= group.maxMembers;
+    return FilledButton(
+      onPressed: full
+          ? null
+          : () async {
+              try {
+                if (group.inviteOnly) {
+                  final note = TextEditingController();
+                  final ok = await showDialog<bool>(
+                    context: context,
+                    builder: (ctx) => AlertDialog(
+                      title: Text('Ask to join ${group.name}'),
+                      content: TextField(
+                        controller: note,
+                        maxLength: 300,
+                        decoration: const InputDecoration(labelText: 'A short note to the owner (optional)'),
+                      ),
+                      actions: [
+                        TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                        FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send')),
+                      ],
+                    ),
+                  );
+                  if (ok != true) return;
+                  await repo.requestToJoinGroup(group.id, note.text.trim().isEmpty ? null : note.text.trim());
+                  ref.invalidate(_pendingProvider);
+                  if (context.mounted) showSnack(context, 'Asked. You will be told when the owner decides.');
+                } else {
+                  await repo.toggleGroupMembership(group.id, true);
+                  ref.invalidate(studyGroupsProvider);
+                }
+              } catch (e) {
+                if (context.mounted) showSnack(context, '$e'.replaceFirst('Exception: ', ''));
+              }
+            },
+      child: Text(full ? 'Full' : group.inviteOnly ? 'Ask to join' : 'Join'),
     );
   }
 }

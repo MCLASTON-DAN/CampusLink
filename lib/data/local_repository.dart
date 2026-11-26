@@ -313,6 +313,10 @@ class LocalRepository implements CampusRepository {
     final i = _groups.indexWhere((g) => g.id == groupId);
     if (i < 0) return;
     final members = List.of(_groups[i].memberIds);
+    if (join && _groups[i].inviteOnly && _groups[i].ownerId != uid) {
+      throw Exception('This group is invite-only. Ask to join instead.');
+    }
+    if (join && !members.contains(uid) && members.length >= _groups[i].maxMembers) throw Exception('This group is full.');
     join ? (members.contains(uid) ? null : members.add(uid)) : members.remove(uid);
     _groups[i] = _groups[i].copyWith(memberIds: members);
     await _save();
@@ -421,4 +425,97 @@ class LocalRepository implements CampusRepository {
 
   @override
   Future<void> deleteExamPaper(String id) async => _papers.removeWhere((e) => e.id == id);
+
+  // ---- study group invites and chat (demo, in memory) ----
+  final _joinAsks = <GroupJoinRequest>[];
+  final _msgs = <GroupMessage>[];
+  final _msgCtrl = StreamController<GroupMessage>.broadcast();
+  StudyGroup? _group(String id) => _groups.where((g) => g.id == id).firstOrNull;
+  bool _member(String groupId) => _group(groupId)?.memberIds.contains(_user?.id) ?? false;
+
+  @override
+  Future<void> requestToJoinGroup(String groupId, String? message) async {
+    if (_member(groupId)) return;
+    if (_joinAsks.any((r) => r.groupId == groupId && r.userId == _user?.id)) return;
+    _joinAsks.add(GroupJoinRequest(id: _uuid.v4(), groupId: groupId, userId: _user!.id, userName: _user!.fullName, message: message));
+  }
+
+  @override
+  Future<Set<String>> myPendingGroupRequests() async => {for (final r in _joinAsks) if (r.userId == _user?.id) r.groupId};
+
+  @override
+  Future<List<GroupJoinRequest>> groupJoinRequests(String groupId) async =>
+      _group(groupId)?.ownerId == _user?.id ? _joinAsks.where((r) => r.groupId == groupId).toList() : [];
+
+  @override
+  Future<void> decideGroupRequest(String requestId, {required bool approve}) async {
+    final r = _joinAsks.where((x) => x.id == requestId).firstOrNull;
+    if (r == null) throw Exception('That request was already handled.');
+    final i = _groups.indexWhere((g) => g.id == r.groupId);
+    if (_groups[i].ownerId != _user?.id) throw Exception('Only the group owner decides.');
+    if (approve) _groups[i] = _groups[i].copyWith(memberIds: [..._groups[i].memberIds, r.userId]);
+    _joinAsks.remove(r);
+  }
+
+  @override
+  Future<void> setGroupPrivacy(String groupId, String privacy) async {
+    final i = _groups.indexWhere((g) => g.id == groupId);
+    if (i < 0 || _groups[i].ownerId != _user?.id) throw Exception('Only the group owner can change this.');
+    _groups[i] = StudyGroup.fromMap({..._groups[i].toMap(), 'privacy': privacy});
+  }
+
+  @override
+  Future<List<GroupMember>> groupMembers(String groupId) async => [
+        for (final id in _group(groupId)?.memberIds ?? const <String>[])
+          (id: id, name: id == _user?.id ? _user!.fullName : id.replaceFirst('local-', '').split('@').first, username: null)
+      ];
+
+  @override
+  Future<List<GroupMessage>> groupMessages(String groupId) async {
+    if (!_member(groupId)) throw Exception('Only members can read this chat.');
+    return _msgs.where((m) => m.groupId == groupId).toList();
+  }
+
+  @override
+  Stream<GroupMessage> groupMessageChanges(String groupId) => _msgCtrl.stream.where((m) => m.groupId == groupId);
+
+  @override
+  Future<void> sendGroupMessage(String groupId, String body, {String? replyTo, List<String> mentions = const [], bool mentionAll = false}) async {
+    if (!_member(groupId)) throw Exception('Only members can write here.');
+    final m = GroupMessage(
+        id: _uuid.v4(), groupId: groupId, authorId: _user!.id, authorName: _user!.fullName, body: body.trim(),
+        replyTo: replyTo, mentions: mentions, mentionAll: mentionAll, createdAt: DateTime.now());
+    _msgs.add(m);
+    _msgCtrl.add(m);
+  }
+
+  void _replace(String id, GroupMessage Function(GroupMessage) f) {
+    final i = _msgs.indexWhere((m) => m.id == id);
+    if (i < 0) return;
+    _msgs[i] = f(_msgs[i]);
+    _msgCtrl.add(_msgs[i]);
+  }
+
+  @override
+  Future<void> deleteGroupMessage(String messageId) async => _replace(messageId, (m) {
+        if (m.authorId != _user?.id) throw Exception('You can only delete your own messages.');
+        return GroupMessage(id: m.id, groupId: m.groupId, authorId: m.authorId, authorName: m.authorName, body: m.body, deleted: true, createdAt: m.createdAt);
+      });
+
+  @override
+  Future<void> pinGroupMessage(String messageId, {required bool pin}) async {
+    final m = _msgs.where((x) => x.id == messageId).firstOrNull;
+    if (m == null) return;
+    if (_group(m.groupId)?.ownerId != _user?.id) throw Exception('Only the group owner pins messages.');
+    if (pin && _msgs.where((x) => x.groupId == m.groupId && x.pinned).length >= 3) throw Exception('Up to 3 pinned messages. Unpin one first.');
+    _replace(messageId, (x) => GroupMessage(
+        id: x.id, groupId: x.groupId, authorId: x.authorId, authorName: x.authorName, body: x.body, replyTo: x.replyTo,
+        mentions: x.mentions, mentionAll: x.mentionAll, pinned: pin, createdAt: x.createdAt));
+  }
+
+  @override
+  Stream<Set<String>> typingIn(String groupId) => const Stream.empty();
+
+  @override
+  void sendTyping(String groupId) {}
 }

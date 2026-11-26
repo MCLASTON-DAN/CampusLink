@@ -19,6 +19,8 @@ import 'package:campuslink/features/notifications/notifications.dart';
 import 'package:campuslink/features/community/policy_gate.dart';
 import 'package:campuslink/features/legal/policies.dart';
 import 'package:shared_preferences/shared_preferences.dart';
+import 'package:campuslink/features/timetable/exams_screen.dart';
+import 'package:campuslink/features/study/group_chat_screen.dart';
 import 'package:campuslink/features/community/tutor_checks.dart';
 
 void main() {
@@ -57,6 +59,8 @@ void main() {
     'terms': () => const PolicyScreen(doc: termsOfUse),
     'event detail': () => const EventDetailScreen(eventId: 'ev-1'),
     'grade checks': () => const GradeChecksScreen(),
+    'exams': () => const ExamsScreen(),
+    'group chat': () => const GroupChatScreen(groupId: 'sg-1'),
     'edit office': () => const OfficeEditScreen(officeId: 'off-registrar'),
   };
 

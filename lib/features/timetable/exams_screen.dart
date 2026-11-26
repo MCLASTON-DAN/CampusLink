@@ -28,10 +28,10 @@ class ExamsScreen extends ConsumerWidget {
       appBar: AppBar(title: const Text('My exams'), actions: [
         IconButton(tooltip: 'Refresh', onPressed: () => ref.invalidate(myExamsProvider), icon: const Icon(Icons.refresh_rounded)),
         if (canManage)
-          TextButton.icon(
+          IconButton(
+            tooltip: 'Official exam list',
             onPressed: () => Navigator.of(context).push(MaterialPageRoute(builder: (_) => const ExamPapersScreen())),
             icon: const Icon(Icons.edit_calendar_rounded),
-            label: const Text('Official list'),
           ),
       ]),
       floatingActionButton: FloatingActionButton.extended(

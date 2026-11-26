@@ -478,6 +478,10 @@ class StudyGroup {
   final int maxMembers;
   final List<String> memberIds;
 
+  /// 'open' (anyone joins) or 'invite' (ask, the owner approves).
+  final String privacy;
+  bool get inviteOnly => privacy == 'invite';
+
   const StudyGroup({
     required this.id,
     required this.name,
@@ -488,6 +492,7 @@ class StudyGroup {
     this.ownerId,
     this.maxMembers = 12,
     this.memberIds = const [],
+    this.privacy = 'open',
   });
 
   StudyGroup copyWith({List<String>? memberIds}) => StudyGroup(
@@ -500,6 +505,7 @@ class StudyGroup {
         ownerId: ownerId,
         maxMembers: maxMembers,
         memberIds: memberIds ?? this.memberIds,
+        privacy: privacy,
       );
 
   factory StudyGroup.fromMap(Map<String, dynamic> m) => StudyGroup(
@@ -512,6 +518,7 @@ class StudyGroup {
         ownerId: m['owner_id'],
         maxMembers: m['max_members'] ?? 12,
         memberIds: _strList(m['member_ids']),
+        privacy: m['privacy'] ?? 'open',
       );
 
   Map<String, dynamic> toMap() => {
@@ -523,6 +530,7 @@ class StudyGroup {
         'location': location,
         'owner_id': ownerId,
         'max_members': maxMembers,
+        'privacy': privacy,
         'member_ids': memberIds,
       };
 }

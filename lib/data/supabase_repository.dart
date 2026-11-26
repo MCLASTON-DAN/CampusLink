@@ -517,4 +517,164 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<void> deleteExamPaper(String id) => _client.from('exam_papers').delete().eq('id', id);
+
+  // ---- study group invites and chat ----
+  Future<Map<String, Map<String, dynamic>>> _names(Iterable<String> ids) async {
+    final list = ids.toSet().toList();
+    if (list.isEmpty) return {};
+    final rows = await _client.from('public_profiles').select('id, full_name, username').inFilter('id', list);
+    return {for (final r in rows) r['id'] as String: r};
+  }
+
+  @override
+  Future<void> requestToJoinGroup(String groupId, String? message) => writeOnce.run('joinAsk|$groupId', () async {
+        try {
+          await _client.from('study_group_requests').insert({'group_id': groupId, 'message': message});
+        } on PostgrestException catch (e) {
+          if (e.code == '23505') return; // already asked
+          rethrow;
+        }
+      });
+
+  @override
+  Future<Set<String>> myPendingGroupRequests() async {
+    try {
+      final rows = await _client.from('study_group_requests').select('group_id').eq('user_id', _uid).eq('status', 'pending');
+      return {for (final r in rows) r['group_id'] as String};
+    } on PostgrestException {
+      return {};
+    }
+  }
+
+  @override
+  Future<List<GroupJoinRequest>> groupJoinRequests(String groupId) async {
+    final rows = await _client.from('study_group_requests').select().eq('group_id', groupId).eq('status', 'pending').order('created_at');
+    final names = await _names([for (final r in rows) r['user_id'] as String]);
+    return [
+      for (final r in rows)
+        GroupJoinRequest(
+            id: r['id'], groupId: groupId, userId: r['user_id'], userName: names[r['user_id']]?['full_name'] ?? '', message: r['message'])
+    ];
+  }
+
+  @override
+  Future<void> decideGroupRequest(String requestId, {required bool approve}) => writeOnce.run('joinDecide|$requestId',
+      () => _client.rpc('decide_group_request', params: {'p_request': requestId, 'p_approve': approve}));
+
+  @override
+  Future<void> setGroupPrivacy(String groupId, String privacy) =>
+      _client.from('study_groups').update({'privacy': privacy}).eq('id', groupId);
+
+  @override
+  Future<List<GroupMember>> groupMembers(String groupId) async {
+    final rows = await _client.from('study_group_members').select('user_id').eq('group_id', groupId);
+    final names = await _names([for (final r in rows) r['user_id'] as String]);
+    return [
+      for (final r in rows)
+        (id: r['user_id'] as String, name: (names[r['user_id']]?['full_name'] ?? '') as String, username: names[r['user_id']]?['username'] as String?)
+    ];
+  }
+
+  @override
+  Future<List<GroupMessage>> groupMessages(String groupId) async {
+    final rows = await _client.from('study_group_messages').select().eq('group_id', groupId).order('created_at', ascending: false).limit(150);
+    final names = await _names([for (final r in rows) r['author_id'] as String]);
+    return [for (final r in rows.reversed) GroupMessage.fromMap(r, name: names[r['author_id']]?['full_name'] ?? '')];
+  }
+
+  @override
+  Stream<GroupMessage> groupMessageChanges(String groupId) {
+    final ctrl = StreamController<GroupMessage>();
+    RealtimeChannel? ch;
+    void add(Map<String, dynamic> row) async {
+      final n = await _names([row['author_id'] as String]);
+      if (!ctrl.isClosed) ctrl.add(GroupMessage.fromMap(row, name: n[row['author_id']]?['full_name'] ?? ''));
+    }
+
+    ctrl.onListen = () {
+      ch = _client
+          .channel('chat-$groupId')
+          .onPostgresChanges(
+            event: PostgresChangeEvent.all,
+            schema: 'public',
+            table: 'study_group_messages',
+            filter: PostgresChangeFilter(type: PostgresChangeFilterType.eq, column: 'group_id', value: groupId),
+            callback: (p) {
+              if (p.newRecord.isNotEmpty) add(p.newRecord);
+            },
+          )
+          .subscribe();
+    };
+    ctrl.onCancel = () async {
+      if (ch != null) await _client.removeChannel(ch!);
+    };
+    return ctrl.stream;
+  }
+
+  @override
+  Future<void> sendGroupMessage(String groupId, String body, {String? replyTo, List<String> mentions = const [], bool mentionAll = false}) =>
+      writeOnce.run('groupMsg|$groupId|$body|$replyTo', () async {
+        await _client.from('study_group_messages').insert({
+          'group_id': groupId,
+          'body': body.trim(),
+          'reply_to': replyTo,
+          'mentions': mentions,
+          'mention_all': mentionAll,
+        });
+      });
+
+  @override
+  Future<void> deleteGroupMessage(String messageId) =>
+      _client.from('study_group_messages').update({'deleted': true}).eq('id', messageId);
+
+  @override
+  Future<void> pinGroupMessage(String messageId, {required bool pin}) => writeOnce.run('pin|$messageId|$pin',
+      () => _client.rpc('pin_group_message', params: {'p_message': messageId, 'p_pin': pin}), toggle: true);
+
+  // Typing: a private channel only members may join (rules in 0020).
+  final _typingChannels = <String, RealtimeChannel>{};
+
+  RealtimeChannel _typingChannel(String groupId) => _typingChannels.putIfAbsent(
+      groupId, () => _client.channel('group:$groupId', opts: const RealtimeChannelConfig(private: true)));
+
+  @override
+  Stream<Set<String>> typingIn(String groupId) {
+    final ctrl = StreamController<Set<String>>();
+    final seen = <String, DateTime>{};
+    Timer? tick;
+    void emit() {
+      final now = DateTime.now();
+      seen.removeWhere((_, t) => now.difference(t).inSeconds > 4);
+      if (!ctrl.isClosed) ctrl.add(seen.keys.toSet());
+    }
+
+    ctrl.onListen = () {
+      final ch = _typingChannel(groupId);
+      ch.onBroadcast(
+        event: 'typing',
+        callback: (p) {
+          final name = p['name']?.toString() ?? '';
+          if (name.isEmpty || p['id'] == _uid) return;
+          seen[name] = DateTime.now();
+          emit();
+        },
+      ).subscribe();
+      tick = Timer.periodic(const Duration(seconds: 2), (_) => emit());
+    };
+    ctrl.onCancel = () async {
+      tick?.cancel();
+      final ch = _typingChannels.remove(groupId);
+      if (ch != null) await _client.removeChannel(ch);
+    };
+    return ctrl.stream;
+  }
+
+  DateTime _lastTyping = DateTime(2000);
+  @override
+  void sendTyping(String groupId) {
+    // At most every 2 seconds, so typing doesn't flood the network.
+    if (DateTime.now().difference(_lastTyping).inSeconds < 2) return;
+    _lastTyping = DateTime.now();
+    _typingChannels[groupId]?.sendBroadcastMessage(event: 'typing', payload: {'id': _uid, 'name': _user?.fullName.split(' ').first ?? ''});
+  }
 }
