@@ -288,13 +288,19 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                             itemBuilder: (_, i) {
                               final m = all[all.length - 1 - i];
                               final original = m.replyTo == null ? null : _messages[m.replyTo];
-                              return _Bubble(
+                              // A day heading above the first message of each day.
+                              final prev = all.length - 2 - i >= 0 ? all[all.length - 2 - i] : null;
+                              final day = DateUtils.dateOnly(m.createdAt.toLocal());
+                              final newDay = prev == null || DateUtils.dateOnly(prev.createdAt.toLocal()) != day;
+                              final bubble = _Bubble(
                                 m: m,
                                 mine: m.authorId == me,
                                 mentionsMe: m.mentionAll || m.mentions.contains(me),
                                 original: original,
                                 onLongPress: () => _actions(m, owner: owner, me: me),
                               );
+                              if (!newDay) return bubble;
+                              return Column(children: [_DayHeader(day), bubble]);
                             },
                           ),
               ),
@@ -390,7 +396,7 @@ class _Bubble extends StatelessWidget {
             const SizedBox(height: 2),
             Row(mainAxisSize: MainAxisSize.min, children: [
               if (m.pinned) const Icon(Icons.push_pin_rounded, size: 12),
-              Text(' ${DateFormat('HH:mm').format(m.createdAt)}', style: t.labelSmall?.copyWith(color: s.onSurfaceVariant)),
+              Text(' ${DateFormat('HH:mm').format(m.createdAt.toLocal())}', style: t.labelSmall?.copyWith(color: s.onSurfaceVariant)),
             ]),
           ]),
         ),
@@ -414,5 +420,34 @@ class _MentionText extends StatelessWidget {
     }
     if (last < text.length) spans.add(TextSpan(text: text.substring(last)));
     return Text.rich(TextSpan(style: Theme.of(context).textTheme.bodyMedium, children: spans));
+  }
+}
+
+
+/// "Today", "Yesterday", "Tuesday 25 Nov", or "25 Nov 2025" between messages.
+class _DayHeader extends StatelessWidget {
+  const _DayHeader(this.day);
+  final DateTime day;
+  @override
+  Widget build(BuildContext context) {
+    final now = DateUtils.dateOnly(DateTime.now());
+    final label = day == now
+        ? 'Today'
+        : day == now.subtract(const Duration(days: 1))
+            ? 'Yesterday'
+            : day.year == now.year
+                ? DateFormat('EEEE d MMM').format(day)
+                : DateFormat('d MMM yyyy').format(day);
+    final c = Theme.of(context).colorScheme;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: 10),
+      child: Center(
+        child: Container(
+          padding: const EdgeInsets.symmetric(horizontal: 12, vertical: 4),
+          decoration: BoxDecoration(color: c.surfaceContainerHighest, borderRadius: BorderRadius.circular(12)),
+          child: Text(label, style: Theme.of(context).textTheme.labelSmall),
+        ),
+      ),
+    );
   }
 }

@@ -1,5 +1,3 @@
-A quick setup when you first sign in: your nickname, studies and topics
-Quiet hours and choose which notifications pop up
-Light or dark theme
-Invite guests with a link (super admin)
-Close your account safely, with 30 days to change your mind
+Clear dates on every post: "Yesterday at 14:30", "24 Nov at 14:30"
+Tap any time to see the full date
+Day headings in group chats

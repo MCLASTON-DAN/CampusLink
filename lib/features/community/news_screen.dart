@@ -169,8 +169,11 @@ class PostCard extends StatelessWidget {
                 Flexible(child: _KindPill(p)),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('${friendlyDate(p.publishedAt)}${p.isRetracted ? ' · RETRACTED' : p.isEdited ? ' · edited' : ''}',
-                      style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
+                  child: Align(
+                    alignment: Alignment.centerLeft,
+                    child: TimeStamp(p.publishedAt,
+                        suffix: p.isRetracted ? ' · RETRACTED' : p.isEdited ? ' · edited' : '', style: t.bodySmall),
+                  ),
                 ),
               ]),
               const SizedBox(height: 8),
@@ -273,7 +276,7 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
                     const SizedBox(height: 16),
                   ],
                   NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: Theme.of(context).textTheme.titleSmall),
-                  Text('${p.kindLabel} · ${friendlyDate(p.publishedAt)}', style: Theme.of(context).textTheme.bodySmall),
+                  TimeStamp(p.publishedAt, prefix: '${p.kindLabel} · '),
                   EditedMark(p.editedAt),
                   if (p.isRetracted) RetractedBanner(word: 'Retracted', by: p.publisherName, reason: p.retractReason),
                   if (_views != null)

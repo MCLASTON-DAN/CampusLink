@@ -244,7 +244,7 @@ class HomeScreen extends ConsumerWidget {
                               maxLines: 1,
                               overflow: TextOverflow.ellipsis,
                               style: t.titleSmall),
-                          subtitle: Text(friendlyDate(a.createdAt)),
+                          subtitle: TimeStamp(a.createdAt),
                           trailing: a.isPinned
                               ? const Icon(Icons.push_pin_rounded,
                                   size: 18, color: Brand.coral)

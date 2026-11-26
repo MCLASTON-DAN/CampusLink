@@ -1,3 +1,4 @@
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
@@ -193,17 +194,92 @@ class AsyncBody<T> extends StatelessWidget {
   }
 }
 
-String friendlyDate(DateTime d) {
-  final now = DateTime.now();
-  final diff = now.difference(d);
-  if (diff.inMinutes < 1) return 'just now';
-  if (diff.inHours < 1) return '${diff.inMinutes} min ago';
-  if (diff.inHours < 24 && d.day == now.day) return '${diff.inHours} h ago';
-  if (diff.inDays < 7) return DateFormat('EEE, HH:mm').format(d);
-  return DateFormat('d MMM yyyy').format(d);
+/// When something happened, like Instagram/Facebook do it, but never
+/// ambiguous: "just now", "5 min ago", "3 h ago", "Yesterday at 14:30",
+/// "25 Nov at 14:30" (this year), "25 Nov 2025" (older). A bare weekday
+/// ("Tue") is never used, because it doesn't say which Tuesday.
+/// Times are always shown in the phone's own time zone (Kampala for most).
+String friendlyDate(DateTime d, {DateTime? now}) {
+  final t = d.toLocal();
+  final n = (now ?? DateTime.now()).toLocal();
+  final diff = n.difference(t);
+  if (diff.isNegative) return scheduledDate(t, now: n); // in the future (scheduled)
+  if (diff.inSeconds < 60) return 'just now';
+  if (diff.inMinutes < 60) return '${diff.inMinutes} min ago';
+  final today = DateTime(n.year, n.month, n.day);
+  final day = DateTime(t.year, t.month, t.day);
+  if (day == today) return '${diff.inHours} h ago';
+  if (day == today.subtract(const Duration(days: 1))) return 'Yesterday at ${DateFormat('HH:mm').format(t)}';
+  if (t.year == n.year) return DateFormat("d MMM 'at' HH:mm").format(t);
+  return DateFormat('d MMM yyyy').format(t);
 }
 
-String eventDate(DateTime d) => DateFormat('EEE d MMM · HH:mm').format(d);
+/// For things that will happen: "Today, 14:00", "Tomorrow, 09:00",
+/// "Sat 29 Nov, 10:00", with the year when it's not this year.
+String scheduledDate(DateTime d, {DateTime? now}) {
+  final t = d.toLocal();
+  final n = (now ?? DateTime.now()).toLocal();
+  final today = DateTime(n.year, n.month, n.day);
+  final day = DateTime(t.year, t.month, t.day);
+  final time = DateFormat('HH:mm').format(t);
+  if (day == today) return 'Today, $time';
+  if (day == today.add(const Duration(days: 1))) return 'Tomorrow, $time';
+  if (day == today.subtract(const Duration(days: 1))) return 'Yesterday, $time';
+  return t.year == n.year ? DateFormat('EEE d MMM, HH:mm').format(t) : DateFormat('EEE d MMM yyyy, HH:mm').format(t);
+}
+
+/// The whole date, for tooltips: "Tuesday 25 November 2026 at 14:30".
+String fullDate(DateTime d) => DateFormat("EEEE d MMMM yyyy 'at' HH:mm").format(d.toLocal());
+
+/// Events: day, date and time, never just a weekday.
+String eventDate(DateTime d) {
+  final t = d.toLocal();
+  final n = DateTime.now();
+  final diff = DateTime(t.year, t.month, t.day).difference(DateTime(n.year, n.month, n.day)).inDays;
+  final time = DateFormat('HH:mm').format(t);
+  if (diff == 0) return 'Today · $time';
+  if (diff == 1) return 'Tomorrow · $time';
+  return t.year == n.year ? DateFormat('EEE d MMM · HH:mm').format(t) : DateFormat('EEE d MMM yyyy · HH:mm').format(t);
+}
+
+/// A timestamp that stays correct ("5 min ago" becomes "6 min ago") and shows
+/// the full date when touched or hovered.
+class TimeStamp extends StatefulWidget {
+  const TimeStamp(this.at, {super.key, this.prefix = '', this.suffix = '', this.style});
+  final DateTime at;
+  final String prefix;
+  final String suffix;
+  final TextStyle? style;
+  @override
+  State<TimeStamp> createState() => _TimeStampState();
+}
+
+class _TimeStampState extends State<TimeStamp> {
+  Timer? _tick;
+
+  @override
+  void initState() {
+    super.initState();
+    // Only fresh items change wording minute by minute.
+    if (DateTime.now().difference(widget.at.toLocal()).inHours < 24) {
+      _tick = Timer.periodic(const Duration(minutes: 1), (_) => mounted ? setState(() {}) : null);
+    }
+  }
+
+  @override
+  void dispose() {
+    _tick?.cancel();
+    super.dispose();
+  }
+
+  @override
+  Widget build(BuildContext context) => Tooltip(
+        message: fullDate(widget.at),
+        triggerMode: TooltipTriggerMode.tap,
+        child: Text('${widget.prefix}${friendlyDate(widget.at)}${widget.suffix}',
+            style: widget.style ?? Theme.of(context).textTheme.bodySmall),
+      );
+}
 
 const dayNames = ['Mon', 'Tue', 'Wed', 'Thu', 'Fri', 'Sat', 'Sun'];
 

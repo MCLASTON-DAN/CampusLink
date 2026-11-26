@@ -242,7 +242,7 @@ class SurveysScreen extends ConsumerWidget {
                   Card(
                     child: ListTile(
                       title: Text(s.title),
-                      subtitle: Text('${s.publisherName}\n${s.purpose}\nCloses ${DateFormat('d MMM').format(s.closesAt)}'),
+                      subtitle: Text('${s.publisherName}\n${s.purpose}\nCloses ${DateFormat('d MMM').format(s.closesAt.toLocal())}'),
                       isThreeLine: true,
                       trailing: s.takenByMe
                           ? const StatusChip('Done', color: Colors.green)
@@ -1020,7 +1020,7 @@ class _MemberCard extends StatelessWidget {
         builder: (ctx, set) => AlertDialog(
           title: Text('Renew ${m.userName ?? 'term'}'),
           content: Column(mainAxisSize: MainAxisSize.min, crossAxisAlignment: CrossAxisAlignment.start, children: [
-            Text('Now ends ${DateFormat('d MMM y').format(m.expiresAt)}. A term can reach at most 12 months from today.'),
+            Text('Now ends ${DateFormat('d MMM y').format(m.expiresAt.toLocal())}. A term can reach at most 12 months from today.'),
             const SizedBox(height: 12),
             Wrap(spacing: 8, children: [
               for (final x in [3, 6, 12]) ChoiceChip(label: Text('$x months from today'), selected: months == x, onSelected: (_) => set(() => months = x)),
@@ -1133,7 +1133,7 @@ class _MemberCard extends StatelessWidget {
     final t = Theme.of(context).textTheme;
     final (label, color) = switch (m.state) {
       'active' => (m.daysLeft <= 14 ? 'Ends in ${m.daysLeft} days' : 'In office · ${m.daysLeft} days left', m.daysLeft <= 14 ? const Color(0xFFF59E0B) : const Color(0xFF14A44D)),
-      'ended' => ('Term ended ${DateFormat('d MMM y').format(m.expiresAt)}', const Color(0xFF64748B)),
+      'ended' => ('Term ended ${DateFormat('d MMM y').format(m.expiresAt.toLocal())}', const Color(0xFF64748B)),
       'removed' => ('Removed from office', const Color(0xFFE0245E)),
       _ => ('Ended early', const Color(0xFF64748B)),
     };

@@ -310,7 +310,7 @@ class _TimelineTile extends StatelessWidget {
                   Row(children: [
                     Text(who, style: const TextStyle(fontWeight: FontWeight.w700)),
                     const SizedBox(width: 8),
-                    Text(friendlyDate(update.createdAt), style: Theme.of(context).textTheme.bodySmall),
+                    TimeStamp(update.createdAt),
                   ]),
                   const SizedBox(height: 2),
                   Text(update.message),

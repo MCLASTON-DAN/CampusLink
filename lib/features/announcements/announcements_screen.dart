@@ -202,7 +202,7 @@ class _AnnouncementCard extends StatelessWidget {
                 const Spacer(),
                 if (a.isPinned) const Icon(Icons.push_pin_rounded, size: 16, color: Brand.coral),
                 const SizedBox(width: 6),
-                Text(friendlyDate(a.createdAt), style: Theme.of(context).textTheme.bodySmall),
+                TimeStamp(a.createdAt),
               ],
             ),
             if (a.isRetracted) RetractedBanner(word: 'Retracted', reason: a.retractReason),
