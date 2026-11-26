@@ -9,6 +9,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import '../account/interests.dart';
 import '../../widgets/section.dart';
 import '../community/events_screens.dart';
 import '../community/news_screen.dart';
@@ -202,6 +203,17 @@ class HomeScreen extends ConsumerWidget {
                   .toList()
                 ..sort((a, b) => a.startsAt.compareTo(b.startsAt));
               if (up.isEmpty) return const _Quiet('No upcoming events.');
+              // Events matching the topics they follow come first (within the
+              // next 2 weeks, so nothing far away hides tomorrow's event).
+              final likes = user?.interests ?? const <String>[];
+              if (likes.isNotEmpty) {
+                final soon = now.add(const Duration(days: 14));
+                bool match(CampusEvent e) => e.startsAt.isBefore(soon) && matchesInterests('${e.title} ${e.topic ?? ''} ${e.description}', likes);
+                final picked = [...up.where(match), ...up.where((e) => !match(e))];
+                up
+                  ..clear()
+                  ..addAll(picked);
+              }
               return TileGrid(children: [
                 for (final e in up.take(3)) EventCard(e, compact: true)
               ]);

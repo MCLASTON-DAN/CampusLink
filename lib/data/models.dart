@@ -39,6 +39,20 @@ class Profile {
   final String? avatarPath; // file in the "avatars" bucket, or a data: URI in demo mode
   final String? statusText; // short "how I'm feeling" note
   final DateTime? statusUntil; // null = stays until removed
+  final String? displayName; // nickname shown to others ("Dan"); fullName stays for offices
+  final DateTime? onboardedAt; // finished the first sign-in setup
+  final List<String> interests; // topics they follow
+  final bool showStudies; // show programme and year to other students
+  final String accountType; // 'student' | 'guest' (joined with an invite link)
+  final String accessLevel; // guests: 'visitor' (read only) | 'member'
+  final DateTime? accessUntil; // guests: when access ends (null = no end)
+  final DateTime? closingAt; // asked to close the account: data goes on this date
+
+  /// What other people see: the nickname if set.
+  String get shownName => (displayName ?? '').trim().isNotEmpty ? displayName! : fullName;
+  bool get isGuest => accountType == 'guest';
+  bool get isVisitor => isGuest && accessLevel == 'visitor';
+  bool get isClosing => closingAt != null;
 
   /// The status, or null once its time is up.
   String? get liveStatus =>
@@ -65,6 +79,14 @@ class Profile {
     this.statusText,
     this.statusUntil,
     this.username,
+    this.displayName,
+    this.onboardedAt,
+    this.interests = const [],
+    this.showStudies = true,
+    this.accountType = 'student',
+    this.accessLevel = 'member',
+    this.accessUntil,
+    this.closingAt,
   });
 
   bool get isStaff => role != UserRole.student;
@@ -90,6 +112,10 @@ class Profile {
     String? statusText,
     DateTime? statusUntil,
     bool clearStatus = false,
+    String? displayName,
+    DateTime? onboardedAt,
+    List<String>? interests,
+    bool? showStudies,
   }) =>
       Profile(
         id: id,
@@ -110,6 +136,14 @@ class Profile {
         username: username ?? this.username,
         statusText: clearStatus ? null : (statusText ?? this.statusText),
         statusUntil: clearStatus ? null : (statusUntil ?? this.statusUntil),
+        displayName: displayName ?? this.displayName,
+        onboardedAt: onboardedAt ?? this.onboardedAt,
+        interests: interests ?? this.interests,
+        showStudies: showStudies ?? this.showStudies,
+        accountType: accountType,
+        accessLevel: accessLevel,
+        accessUntil: accessUntil,
+        closingAt: closingAt,
       );
 
   factory Profile.fromMap(Map<String, dynamic> m) => Profile(
@@ -131,6 +165,14 @@ class Profile {
         username: m['username'],
         statusText: m['status_text'],
         statusUntil: m['status_until'] == null ? null : DateTime.parse(m['status_until'].toString()),
+        displayName: m['display_name'],
+        onboardedAt: m['onboarded_at'] == null ? null : DateTime.tryParse(m['onboarded_at'].toString()),
+        interests: _strList(m['interests']),
+        showStudies: m['show_studies'] ?? true,
+        accountType: m['account_type'] ?? 'student',
+        accessLevel: m['access_level'] ?? 'member',
+        accessUntil: m['access_until'] == null ? null : DateTime.tryParse(m['access_until'].toString()),
+        closingAt: m['closing_at'] == null ? null : DateTime.tryParse(m['closing_at'].toString()),
       );
 
   Map<String, dynamic> toMap() => {
@@ -152,6 +194,14 @@ class Profile {
         'username': username,
         'status_text': statusText,
         'status_until': statusUntil?.toIso8601String(),
+        'display_name': displayName,
+        'onboarded_at': onboardedAt?.toIso8601String(),
+        'interests': interests,
+        'show_studies': showStudies,
+        'account_type': accountType,
+        'access_level': accessLevel,
+        'access_until': accessUntil?.toIso8601String(),
+        'closing_at': closingAt?.toIso8601String(),
       };
 }
 

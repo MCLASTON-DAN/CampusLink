@@ -66,7 +66,8 @@ class SupabaseRepository implements CampusRepository {
   /// Every profile column others may read. Student number is left out on purpose.
   static const profileColumns = 'id, full_name, programme, year_of_study, faculty, role, is_tutor, tutor_subjects, '
       'is_buddy_mentor, created_at, tutor_verified, tutor_verified_at, avatar_path, status_text, status_until, '
-      'username, username_changed_at';
+      'username, username_changed_at, display_name, onboarded_at, interests, show_studies, account_type, '
+      'access_level, access_until, closing_at';
 
   Future<String?> _myStudentNumber() async {
     try {
@@ -230,6 +231,10 @@ class SupabaseRepository implements CampusRepository {
       if (p.username != null && p.username != _user?.username) 'username': p.username!.trim().toLowerCase().replaceAll('@', ''),
       'status_text': p.statusText,
       'status_until': p.statusUntil?.toUtc().toIso8601String(),
+      'display_name': (p.displayName ?? '').trim().isEmpty ? null : p.displayName!.trim(),
+      'interests': p.interests,
+      'show_studies': p.showStudies,
+      if (p.onboardedAt != null) 'onboarded_at': p.onboardedAt!.toUtc().toIso8601String(),
     }).eq('id', p.id);
     await _refreshProfile();
     return _user!;
@@ -359,7 +364,7 @@ class SupabaseRepository implements CampusRepository {
   // ---- study ----
   @override
   Future<List<Profile>> tutors() async {
-    final rows = await _client.from('profiles').select(profileColumns).eq('is_tutor', true);
+    final rows = await _client.from('profiles').select(profileColumns).eq('is_tutor', true).isFilter('closing_at', null);
     return rows.map(Profile.fromMap).toList();
   }
 
@@ -469,7 +474,7 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<List<Profile>> mentors() async {
-    final rows = await _client.from('profiles').select(profileColumns).eq('is_buddy_mentor', true);
+    final rows = await _client.from('profiles').select(profileColumns).eq('is_buddy_mentor', true).isFilter('closing_at', null);
     return rows.map(Profile.fromMap).toList();
   }
 

@@ -1,4 +1,5 @@
-Updates now download inside the app, with a progress bar
-Reset your password with a 6-digit code
-Tutors can show their price, and share contact details safely
-Add your classes, exams and events to Google Calendar
+A quick setup when you first sign in: your nickname, studies and topics
+Quiet hours and choose which notifications pop up
+Light or dark theme
+Invite guests with a link (super admin)
+Close your account safely, with 30 days to change your mind

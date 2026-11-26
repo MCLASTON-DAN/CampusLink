@@ -161,6 +161,90 @@ class AccountApi {
     };
   }
 
+  // ------------------------------------------------------------------
+  // Invites (0027)
+  // ------------------------------------------------------------------
+
+  static String inviteUrl(String token) => '${AppConfig.webUrl.replaceAll(RegExp(r'/$'), '')}/#/invite/$token';
+
+  Future<String> createInvite({
+    required bool personal,
+    String? email,
+    required String level,
+    int maxUses = 1,
+    required int linkDays,
+    DateTime? accessUntil,
+    String? note,
+  }) async {
+    try {
+      return await _db.rpc('create_invite', params: {
+        'p_kind': personal ? 'personal' : 'group',
+        'p_email': email,
+        'p_level': level,
+        'p_max_uses': maxUses,
+        'p_link_days': linkDays,
+        'p_access_until': accessUntil?.toUtc().toIso8601String(),
+        'p_note': note,
+      }) as String;
+    } on PostgrestException catch (e) {
+      throw Exception(_readable(e));
+    }
+  }
+
+  Future<List<Map<String, dynamic>>> invites() async =>
+      List<Map<String, dynamic>>.from(await _db.from('invites').select().order('created_at', ascending: false).limit(100));
+
+  Future<void> revokeInvite(String id) => _db.rpc('revoke_invite', params: {'p_invite': id});
+
+  Future<List<Map<String, dynamic>>> guests() async => List<Map<String, dynamic>>.from(await _db.rpc('list_guests') as List);
+
+  Future<void> setGuestAccess(String userId, {DateTime? until, bool endNow = false}) => _db.rpc('set_guest_access',
+      params: {'p_user': userId, 'p_until': until?.toUtc().toIso8601String(), 'p_end_now': endNow});
+
+  Future<void> setGuestLevel(String userId, String level) =>
+      _db.rpc('set_guest_level', params: {'p_user': userId, 'p_level': level});
+
+  Future<Map<String, dynamic>> inviteInfo(String token) async =>
+      Map<String, dynamic>.from(await _db.rpc('invite_info', params: {'p_token': token}) as Map);
+
+  Future<Map<String, dynamic>> claimInvite(String token, String email) async =>
+      Map<String, dynamic>.from(await _db.rpc('claim_invite', params: {'p_token': token, 'p_email': email.trim()}) as Map);
+
+  // ------------------------------------------------------------------
+  // Personal settings and closing the account
+  // ------------------------------------------------------------------
+
+  Future<UserSettings> settings() async {
+    final r = await _db.from('user_settings').select().maybeSingle();
+    return r == null ? const UserSettings() : UserSettings.fromMap(r);
+  }
+
+  Future<void> saveSettings(UserSettings s) => _db
+      .from('user_settings')
+      .upsert({'user_id': _db.auth.currentUser!.id, ...s.toMap(), 'updated_at': DateTime.now().toUtc().toIso8601String()});
+
+  /// Returns the date the account's data will be removed.
+  Future<DateTime> requestClosure({String? reason}) async {
+    try {
+      final r = await _db.rpc('request_account_closure', params: {'p_reason': reason});
+      return DateTime.parse('$r').toLocal();
+    } on PostgrestException catch (e) {
+      throw Exception(_readable(e));
+    }
+  }
+
+  Future<void> cancelClosure() => _db.rpc('cancel_account_closure');
+
+  /// Removes your profile photo files now (not kept during the 30 days).
+  Future<void> deleteMyPhotos() async {
+    final uid = _db.auth.currentUser!.id;
+    try {
+      final files = await _db.storage.from('avatars').list(path: uid);
+      if (files.isNotEmpty) await _db.storage.from('avatars').remove([for (final f in files) '$uid/${f.name}']);
+    } catch (_) {/* nothing to remove */}
+    await _db.from('profiles').update({'avatar_path': null}).eq('id', uid);
+  }
+
   static String _readable(PostgrestException e) {
     final m = e.message;
     if (m.contains('tutor_contacts_phone_check')) return 'Check the phone number, e.g. 0772 123456.';
@@ -431,9 +515,57 @@ String friendlyAccountError(Object e) {
   if (m.contains('over_email_send_rate_limit') || m.contains('rate limit') || m.contains('security purposes')) {
     return 'Too many emails sent. Wait a minute, then try again.';
   }
+  if (m.contains('banned')) return 'Your guest access has ended. Ask the CampusLink admin for a new invite.';
   if (m.contains('provider is not enabled')) return 'Google sign-in is not switched on yet. Ask the admin.';
   if (m.contains('socket') || m.contains('failed host lookup') || m.contains('network') || m.contains('xmlhttprequest')) {
     return 'No internet connection. Check it and try again.';
   }
   return 'Something went wrong. Please try again.';
+}
+
+
+/// Which pop-ups someone wants, and quiet hours (stored per person, 0027).
+class UserSettings {
+  const UserSettings({
+    this.kinds = const ['course', 'official', 'event', 'tutor', 'request', 'office', 'access', 'group'],
+    this.quietEnabled = true,
+    this.quietStart = '22:00',
+    this.quietEnd = '06:00',
+  });
+  factory UserSettings.fromMap(Map<String, dynamic> m) => UserSettings(
+        kinds: [for (final k in (m['notify_kinds'] as List? ?? const [])) '$k'],
+        quietEnabled: m['quiet_enabled'] != false,
+        quietStart: '${m['quiet_start'] ?? '22:00'}'.substring(0, 5),
+        quietEnd: '${m['quiet_end'] ?? '06:00'}'.substring(0, 5),
+      );
+  final List<String> kinds;
+  final bool quietEnabled;
+  final String quietStart; // HH:MM
+  final String quietEnd;
+
+  Map<String, dynamic> toMap() =>
+      {'notify_kinds': kinds, 'quiet_enabled': quietEnabled, 'quiet_start': quietStart, 'quiet_end': quietEnd};
+
+  UserSettings copyWith({List<String>? kinds, bool? quietEnabled, String? quietStart, String? quietEnd}) => UserSettings(
+        kinds: kinds ?? this.kinds,
+        quietEnabled: quietEnabled ?? this.quietEnabled,
+        quietStart: quietStart ?? this.quietStart,
+        quietEnd: quietEnd ?? this.quietEnd,
+      );
+
+  static int _min(String hhmm) => int.parse(hhmm.substring(0, 2)) * 60 + int.parse(hhmm.substring(3, 5));
+
+  /// Inside quiet hours right now? (Handles 22:00–06:00 across midnight.)
+  bool isQuiet(DateTime now) {
+    if (!quietEnabled) return false;
+    final t = now.hour * 60 + now.minute, a = _min(quietStart), b = _min(quietEnd);
+    return a <= b ? (t >= a && t < b) : (t >= a || t < b);
+  }
+
+  /// Should a pop-up for this kind show now? Urgent ones always do.
+  bool allows(String kind, {bool urgent = false, DateTime? now}) {
+    if (urgent) return true;
+    if (!kinds.contains(kind)) return false;
+    return !isQuiet(now ?? DateTime.now());
+  }
 }

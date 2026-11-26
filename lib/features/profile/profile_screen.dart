@@ -36,6 +36,21 @@ class ProfileScreen extends ConsumerWidget {
       body: PageBody(
         children: [
           _ProfileHeader(user: user),
+          if (user.isGuest)
+            Card(
+              color: Theme.of(context).colorScheme.secondaryContainer,
+              child: ListTile(
+                leading: const Icon(Icons.badge_outlined),
+                title: Text(user.isVisitor ? 'Visitor account' : 'Guest member'),
+                subtitle: Text([
+                  if (user.isVisitor) 'You can read news, events and office information, but not post or join.',
+                  if (!user.isVisitor) 'You can use CampusLink like a student. Others see a Guest label.',
+                  user.accessUntil == null
+                      ? 'Your access has no end date.'
+                      : 'Your access ends ${MaterialLocalizations.of(context).formatMediumDate(user.accessUntil!.toLocal())}.',
+                ].join(' ')),
+              ),
+            ),
           const SizedBox(height: 16),
           Card(
             child: Column(
@@ -104,6 +119,7 @@ class ProfileScreen extends ConsumerWidget {
                       onTap: () => context.push('/update')),
             ),
             ActionTile(icon: Icons.notifications_rounded, title: 'Notifications', subtitle: 'Inbox and pop-up settings', color: const Color(0xFFDB2777), onTap: () => context.push('/notifications')),
+            ActionTile(icon: Icons.tune_rounded, title: 'Personalise', subtitle: 'Name, studies, topics, notifications, theme', color: const Color(0xFF7C3AED), onTap: () => context.push('/welcome/edit')),
             ActionTile(icon: Icons.event_available_rounded, title: 'My calendar', subtitle: 'Classes, exams and events in Google Calendar', color: const Color(0xFF0D9488), onTap: () => context.push('/account/calendar')),
             ActionTile(icon: Icons.password_rounded, title: 'Password', subtitle: 'Create or change your password', color: const Color(0xFF334155), onTap: () => openPasswordSettings(context)),
             if (user.isTutor)
@@ -144,6 +160,8 @@ class ProfileScreen extends ConsumerWidget {
               if (user.isSuperAdmin)
                 ActionTile(icon: Icons.system_update_rounded, title: 'App updates', subtitle: 'Require everyone to update', color: const Color(0xFF16A34A), onTap: () => context.push('/admin/app-updates')),
               if (user.isSuperAdmin)
+                ActionTile(icon: Icons.link_rounded, title: 'Invites and guests', subtitle: 'Invite people without a school email', color: const Color(0xFF0EA5E9), onTap: () => context.push('/admin/invites')),
+              if (user.isSuperAdmin)
                 ActionTile(icon: Icons.alternate_email_rounded, title: 'Who can join', subtitle: 'School email types and exceptions', color: const Color(0xFFDC2626), onTap: () => context.push('/admin/email-rules')),
               if (user.isSuperAdmin)
                 ActionTile(icon: Icons.approval_rounded, title: 'Major event requests', subtitle: 'Approve what shows on home', color: const Color(0xFFF59E0B), onTap: () => context.push('/events/requests')),
@@ -174,6 +192,14 @@ class ProfileScreen extends ConsumerWidget {
             icon: const Icon(Icons.logout_rounded),
             label: const Text('Sign out'),
           ),
+          if (!demo) ...[
+            const SizedBox(height: 8),
+            TextButton(
+              onPressed: () => context.push('/account/close'),
+              style: TextButton.styleFrom(foregroundColor: Theme.of(context).colorScheme.error),
+              child: const Text('Close my account'),
+            ),
+          ],
         ],
       ),
     );
@@ -380,7 +406,7 @@ class _ProfileHeader extends ConsumerWidget {
                       ? Container(
                           color: Colors.white.withValues(alpha: 0.25),
                           alignment: Alignment.center,
-                          child: Text(user.fullName.isEmpty ? '?' : user.fullName[0].toUpperCase(),
+                          child: Text(user.shownName.isEmpty ? '?' : user.shownName[0].toUpperCase(),
                               style: const TextStyle(color: Colors.white, fontSize: 28, fontWeight: FontWeight.w900)),
                         )
                       : NetPicture(user.avatarPath!, alwaysLoad: true),
@@ -402,7 +428,7 @@ class _ProfileHeader extends ConsumerWidget {
             child: Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
               Row(children: [
                 Flexible(
-                  child: Text(user.fullName,
+                  child: Text(user.shownName,
                       overflow: TextOverflow.ellipsis,
                       style: const TextStyle(color: Colors.white, fontSize: 20, fontWeight: FontWeight.w800)),
                 ),

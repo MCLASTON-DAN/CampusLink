@@ -17,6 +17,10 @@ import 'features/account/calendar_sync_screen.dart';
 import 'features/account/email_rules_admin.dart';
 import 'features/account/password_screens.dart';
 import 'features/account/tutor_offer.dart';
+import 'features/account/close_account.dart';
+import 'features/account/invite_screens.dart';
+import 'features/account/theme_mode.dart';
+import 'features/account/welcome_screen.dart';
 import 'features/buddy/buddy_screen.dart';
 import 'features/community/policy_gate.dart';
 import 'features/courses/courses_screen.dart';
@@ -57,12 +61,23 @@ final routerProvider = Provider<GoRouter>((ref) {
     redirect: (context, state) {
       final auth = ref.read(currentUserProvider);
       if (auth.isLoading) return null;
-      final signedIn = auth.valueOrNull != null;
-      final onLogin = state.matchedLocation == '/login';
+      final me = auth.valueOrNull;
+      final signedIn = me != null;
+      final loc = state.matchedLocation;
+      final onLogin = loc == '/login';
+      // Invite links open for anyone; the page itself handles signed-in people.
+      if (loc.startsWith('/invite/')) return null;
       // Password reset pages work signed in or out: the reset itself signs you
       // in for a moment, and the profile may not have loaded yet.
       if (const {'/forgot-password', '/set-password'}.contains(state.matchedLocation)) return null;
       if (!signedIn && !onLogin) return '/login';
+      if (signedIn && !ref.read(isDemoModeProvider)) {
+        // Closing accounts see only "Keep my account"; new people do the
+        // 1-minute setup first.
+        if (me.isClosing) return loc == '/account/closing' ? null : '/account/closing';
+        if (loc == '/account/closing') return '/home';
+        if (me.onboardedAt == null && me.id.isNotEmpty) return loc == '/welcome' ? null : '/welcome';
+      }
       if (signedIn && onLogin) return '/home';
       return null;
     },
@@ -73,6 +88,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           path: '/forgot-password',
           builder: (_, s) => ForgotPasswordScreen(initialEmail: s.extra is String ? s.extra as String : '')),
       GoRoute(path: '/set-password', builder: (_, __) => const SetNewPasswordScreen()),
+      GoRoute(path: '/welcome', builder: (_, __) => const WelcomeScreen()),
+      GoRoute(path: '/account/closing', builder: (_, __) => const AccountClosingScreen()),
+      GoRoute(path: '/invite/:token', builder: (_, s) => InviteScreen(token: s.pathParameters['token']!)),
       ShellRoute(
         builder: (context, state, child) =>
             NotificationHost(
@@ -151,6 +169,9 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/account/calendar', builder: (_, __) => const CalendarSyncScreen()),
           GoRoute(path: '/admin/email-rules', builder: (_, __) => const EmailRulesAdminScreen()),
           GoRoute(path: '/admin/app-updates', builder: (_, __) => const AppUpdatesAdminScreen()),
+          GoRoute(path: '/admin/invites', builder: (_, __) => const InvitesAdminScreen()),
+          GoRoute(path: '/welcome/edit', builder: (_, __) => const WelcomeScreen(editing: true)),
+          GoRoute(path: '/account/close', builder: (_, __) => const CloseAccountScreen()),
           GoRoute(path: '/update', builder: (_, __) => const UpdateDetailsScreen()),
           GoRoute(path: '/moderation', builder: (_, __) => const ModerationLogScreen()),
           GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
@@ -179,9 +200,15 @@ final routerProvider = Provider<GoRouter>((ref) {
 class _AuthNotifier extends ChangeNotifier {
   _AuthNotifier(Ref ref) {
     ref.listen(currentUserProvider, (prev, next) {
-      final before = prev?.valueOrNull?.id;
-      final after = next.valueOrNull?.id;
-      if (before != after || (prev?.isLoading ?? true) != next.isLoading) notifyListeners();
+      final a = prev?.valueOrNull, b = next.valueOrNull;
+      // Re-check the route when who is signed in changes, or when they finish
+      // setup / start or cancel closing their account.
+      if (a?.id != b?.id ||
+          (prev?.isLoading ?? true) != next.isLoading ||
+          (a?.onboardedAt == null) != (b?.onboardedAt == null) ||
+          a?.isClosing != b?.isClosing) {
+        notifyListeners();
+      }
     });
   }
 }
@@ -197,7 +224,7 @@ class CampusLinkApp extends ConsumerWidget {
       debugShowCheckedModeBanner: false,
       theme: buildTheme(Brightness.light),
       darkTheme: buildTheme(Brightness.dark),
-      themeMode: ThemeMode.system,
+      themeMode: ref.watch(themeModeProvider),
       routerConfig: router,
       // Status bar (clock, battery) blends with the app: same colour as the
       // page, with icons that stay readable in light and dark mode.

@@ -10,6 +10,7 @@ import '../../core/notify/device_notify.dart';
 import '../../data/community_models.dart';
 import '../../data/providers.dart';
 import '../../widgets/section.dart';
+import '../account/account_api.dart' show AccountApi, UserSettings;
 
 const _prefKey = 'campuslink.notify.enabled';
 
@@ -57,6 +58,7 @@ class NotificationHost extends ConsumerStatefulWidget {
 class _HostState extends ConsumerState<NotificationHost> {
   StreamSubscription<AppNotification>? _sub;
   String? _forUser;
+  UserSettings _prefs = const UserSettings();
 
   void _listen(String? userId) {
     if (userId == _forUser) return;
@@ -64,6 +66,9 @@ class _HostState extends ConsumerState<NotificationHost> {
     _sub?.cancel();
     _sub = null;
     if (userId == null) return;
+    if (AccountApi.instance.available) {
+      AccountApi.instance.settings().then((v) => _prefs = v).catchError((_) => _prefs);
+    }
     // Counted once a day for the admin dashboard (numbers only, never names).
     ref.read(communityProvider).touchActivity();
     _sub = ref.read(communityProvider).newNotifications().listen((n) {
@@ -76,6 +81,10 @@ class _HostState extends ConsumerState<NotificationHost> {
         ref.invalidate(myMembershipsProvider);
         ref.invalidate(myRequestsProvider);
       }
+      // Their choices: which kinds pop up, and quiet hours. Urgent ones
+      // (e.g. an office reply marked urgent) always show. Everything still
+      // lands in the inbox.
+      if (!_prefs.allows(n.kind, urgent: n.priority == 'urgent')) return;
       if (ref.read(deviceNotifyProvider)) {
         deviceNotifyShow(n.title, n.body, link: n.link);
       } else if (mounted) {

@@ -29,6 +29,7 @@ class VerifiedBadge extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    if (color == 'guest') return _GuestLabel(size: size);
     final col = _c(color);
     if (col == null) return const SizedBox.shrink();
     return Tooltip(
@@ -116,4 +117,29 @@ class _RosettePainter extends CustomPainter {
 
   @override
   bool shouldRepaint(_RosettePainter old) => old.color != color;
+}
+
+
+/// "Guest" pill: joined with an invite, not a school email. Not a tick, on
+/// purpose: it tells people this person was not checked by the university.
+class _GuestLabel extends StatelessWidget {
+  const _GuestLabel({required this.size});
+  final double size;
+  @override
+  Widget build(BuildContext context) {
+    final c = Theme.of(context).colorScheme;
+    return Tooltip(
+      message: 'Guest: joined with an invite, not a school email.',
+      child: Container(
+        margin: const EdgeInsets.only(left: 6),
+        padding: const EdgeInsets.symmetric(horizontal: 6, vertical: 1),
+        decoration: BoxDecoration(
+          color: c.surfaceContainerHighest,
+          borderRadius: BorderRadius.circular(6),
+          border: Border.all(color: c.outlineVariant),
+        ),
+        child: Text('Guest', style: TextStyle(fontSize: size * .7, fontWeight: FontWeight.w700, color: c.onSurfaceVariant)),
+      ),
+    );
+  }
 }
