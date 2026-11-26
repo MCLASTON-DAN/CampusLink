@@ -375,6 +375,7 @@ class _WelcomeScreenState extends ConsumerState<WelcomeScreen> {
           ('tutor', 'Tutoring'),
           ('request', 'My requests'),
           ('group', 'Study groups'),
+          ('social', 'Replies & mentions'),
         ])
           FilterChip(
             label: Text(k.$2),

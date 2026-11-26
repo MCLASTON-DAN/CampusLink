@@ -73,6 +73,24 @@ Future<bool> deviceNotifyAsk() async {
   }
 }
 
+/// Makes sure the "CampusLink updates" channel exists, so alerts sent while
+/// the app is closed land there (and follow the person's channel settings).
+Future<void> deviceEnsureAlertChannel() async {
+  if (kIsWeb || !Platform.isAndroid) return;
+  try {
+    await _init();
+    await _plugin
+        .resolvePlatformSpecificImplementation<AndroidFlutterLocalNotificationsPlugin>()
+        ?.createNotificationChannel(const AndroidNotificationChannel(
+          'campuslink_updates',
+          'CampusLink updates',
+          description: 'Course notices, official notices, events and requests',
+          importance: Importance.high,
+          playSound: true,
+        ));
+  } catch (_) {}
+}
+
 /// Shows a notification with the device's default sound.
 Future<void> deviceNotifyShow(String title, String body, {String? link}) async {
   if (!_supported) return;

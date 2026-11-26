@@ -527,7 +527,7 @@ String friendlyAccountError(Object e) {
 /// Which pop-ups someone wants, and quiet hours (stored per person, 0027).
 class UserSettings {
   const UserSettings({
-    this.kinds = const ['course', 'official', 'event', 'tutor', 'request', 'office', 'access', 'group'],
+    this.kinds = const ['course', 'official', 'event', 'tutor', 'request', 'office', 'access', 'group', 'social'],
     this.quietEnabled = true,
     this.quietStart = '22:00',
     this.quietEnd = '06:00',

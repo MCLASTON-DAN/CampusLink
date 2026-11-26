@@ -7,6 +7,7 @@ import 'package:supabase_flutter/supabase_flutter.dart';
 import 'package:url_launcher/url_launcher.dart';
 
 import '../core/config.dart';
+import '../core/notify/push.dart';
 
 import 'community_repository.dart';
 import 'community_supabase.dart';
@@ -170,6 +171,7 @@ class SupabaseRepository implements CampusRepository {
   @override
   Future<void> signOut() async {
     _cache?.clear(); // a shared phone must not show your saved data to the next person
+    await PushService.instance.unregister(); // and must not ring with your alerts
     await _client.auth.signOut();
   }
 

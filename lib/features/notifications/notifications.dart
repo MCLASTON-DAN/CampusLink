@@ -7,12 +7,14 @@ import 'package:intl/intl.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 
 import '../../core/notify/device_notify.dart';
+import '../../core/notify/push.dart';
 import '../../data/community_models.dart';
 import '../../data/providers.dart';
 import '../../widgets/section.dart';
 import '../account/account_api.dart' show AccountApi, UserSettings;
 
 const _prefKey = 'campuslink.notify.enabled';
+const _askedKey = 'campuslink.push.asked';
 
 /// Has this person allowed pop-up notifications on THIS device?
 final deviceNotifyProvider = StateNotifierProvider<DeviceNotifyCtrl, bool>((ref) => DeviceNotifyCtrl());
@@ -66,6 +68,7 @@ class _HostState extends ConsumerState<NotificationHost> {
     _sub?.cancel();
     _sub = null;
     if (userId == null) return;
+    _startPush();
     if (AccountApi.instance.available) {
       AccountApi.instance.settings().then((v) => _prefs = v).catchError((_) => _prefs);
     }
@@ -85,6 +88,9 @@ class _HostState extends ConsumerState<NotificationHost> {
       // (e.g. an office reply marked urgent) always show. Everything still
       // lands in the inbox.
       if (!_prefs.allows(n.kind, urgent: n.priority == 'urgent')) return;
+      // In the background the phone alert (push) already rings; don't ring twice.
+      final foreground = WidgetsBinding.instance.lifecycleState == AppLifecycleState.resumed;
+      if (!foreground && PushService.instance.active) return;
       if (ref.read(deviceNotifyProvider)) {
         deviceNotifyShow(n.title, n.body, link: n.link);
       } else if (mounted) {
@@ -94,6 +100,26 @@ class _HostState extends ConsumerState<NotificationHost> {
         ));
       }
     }, onError: (_) {});
+  }
+
+  /// Phones: ask once whether CampusLink may ring, then save this phone's
+  /// code so alerts arrive even when the app is closed.
+  Future<void> _startPush() async {
+    final push = PushService.instance;
+    if (!push.supported) return;
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (p.getBool(_askedKey) != true) {
+        await p.setBool(_askedKey, true);
+        await ref.read(deviceNotifyProvider.notifier).set(true);
+      }
+    } catch (_) {}
+    if (!mounted || _forUser == null) return;
+    if (ref.read(deviceNotifyProvider)) {
+      await push.register((link) {
+        if (mounted) GoRouter.of(context).push(link);
+      });
+    }
   }
 
   @override
@@ -106,6 +132,15 @@ class _HostState extends ConsumerState<NotificationHost> {
   Widget build(BuildContext context) {
     final user = ref.watch(currentUserProvider).valueOrNull;
     _listen(user?.id);
+    // Alerts switched on or off in Settings: follow it on the server too.
+    ref.listen<bool>(deviceNotifyProvider, (was, now) {
+      if (was == now || _forUser == null) return;
+      if (now) {
+        _startPush();
+      } else {
+        PushService.instance.unregister();
+      }
+    });
     return widget.child;
   }
 }

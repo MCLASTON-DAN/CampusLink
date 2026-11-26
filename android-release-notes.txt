@@ -1,4 +1,3 @@
-Six reactions: tap for 👍, press and hold for ❤️ 😂 😮 🎉 😢
-Reply to comments and mention people with @username
-Reminder one hour before events you're going to
-Staff see "Seen by" on announcements and can remind once
+Alerts now reach your phone even when CampusLink is closed
+Quiet hours and your alert choices still apply
+New alert type: replies and mentions
