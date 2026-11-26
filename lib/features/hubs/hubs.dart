@@ -80,6 +80,7 @@ class StudyHubScreen extends StatelessWidget {
           const SectionTitle('Your week'),
           TileGrid(children: [
             ActionTile(icon: Icons.calendar_month_rounded, title: 'Timetable', subtitle: 'Your classes. Import from Excel or CSV', color: const Color(0xFF3B2DB3), onTap: () => context.go('/timetable')),
+            ActionTile(icon: Icons.event_note_rounded, title: 'Exams', subtitle: 'Real dates, clashes and reminders', color: const Color(0xFFB91C1C), onTap: () => context.go('/exams')),
             ActionTile(icon: Icons.menu_book_rounded, title: 'Course units', subtitle: 'Notices from your lecturers, only for your units', color: const Color(0xFFF97316), onTap: () => context.go('/courses')),
             ActionTile(icon: Icons.handshake_rounded, title: 'First-year buddy', subtitle: 'Get matched with a senior mentor', color: const Color(0xFFF59E0B), onTap: () => context.push('/buddy')),
             ActionTile(icon: Icons.monitor_heart_rounded, title: 'Campus pulse', subtitle: 'Quick anonymous polls', color: const Color(0xFFDB2777), onTap: () => context.push('/pulse')),

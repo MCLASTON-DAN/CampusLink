@@ -87,6 +87,7 @@ class _PickerPageState extends State<_PickerPage> {
 
   Future<void> _confirm(PersonHit p) async {
     final ok = await showModalBottomSheet<bool>(
+      useRootNavigator: true, // above the tab bar, never under it
       context: context,
       showDragHandle: true,
       builder: (sheet) => SafeArea(

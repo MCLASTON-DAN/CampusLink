@@ -721,6 +721,7 @@ Future<void> sharePost(BuildContext context, Post p) {
   final excerpt = clean.length > 180 ? '${clean.substring(0, 180).trimRight()}…' : clean;
   final text = '📰 ${p.title}\n${p.byline} · ${friendlyDate(p.publishedAt)}\n\n$excerpt\n\nRead the full story on CampusLink:\n$link';
   return showModalBottomSheet(
+    useRootNavigator: true, // above the tab bar, never under it
     context: context,
     showDragHandle: true,
     isScrollControlled: true,

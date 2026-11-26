@@ -470,4 +470,51 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<void> deleteTimetableEntry(String id) => _client.from('timetable_entries').delete().eq('id', id);
+
+  // ---- exams ----
+  @override
+  Future<List<ExamEntry>> myExams() async {
+    final units = {for (final t in await timetable()) t.courseCode};
+    List<ExamEntry> official = [], mine = [];
+    try {
+      final today = DateTime.now().toIso8601String().substring(0, 10);
+      official = [
+        for (final r in await _client.from('exam_papers').select().gte('exam_date', today)) ExamEntry.fromMap(r, official: true)
+      ];
+      mine = [for (final r in await _client.from('my_exams').select().gte('exam_date', today)) ExamEntry.fromMap(r)];
+    } on PostgrestException {/* database not updated yet */}
+    return mergeMyExams(official: official, mine: mine, myUnits: units);
+  }
+
+  @override
+  Future<void> addMyExam(ExamEntry e) => writeOnce.run('myExam|${e.courseCode}|${e.date}|${e.start}',
+      () => _client.from('my_exams').insert(e.toMap()..['user_id'] = _uid));
+
+  @override
+  Future<void> deleteMyExam(String id) => _client.from('my_exams').delete().eq('id', id);
+
+  @override
+  Future<List<ExamEntry>> examPapers() async =>
+      [for (final r in await _client.from('exam_papers').select().order('exam_date').order('start_time')) ExamEntry.fromMap(r, official: true)];
+
+  @override
+  Future<bool> canManageExams() async {
+    try {
+      return (await _client.rpc('can_manage_exams')) == true;
+    } on PostgrestException {
+      return false;
+    }
+  }
+
+  @override
+  Future<void> saveExamPaper(ExamEntry e) => writeOnce.run('examPaper|${e.id}|${e.date}|${e.start}|${e.room}', () async {
+        try {
+          await _client.from('exam_papers').upsert({...e.toMap(), 'course_code': e.courseCode.toUpperCase().replaceAll(RegExp(r'\s+'), ''), 'updated_at': DateTime.now().toUtc().toIso8601String()});
+        } on PostgrestException catch (err) {
+          throw Exception(err.code == '42501' ? 'Only the Examinations office can change official papers.' : err.message);
+        }
+      });
+
+  @override
+  Future<void> deleteExamPaper(String id) => _client.from('exam_papers').delete().eq('id', id);
 }

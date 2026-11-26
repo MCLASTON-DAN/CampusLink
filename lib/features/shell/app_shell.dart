@@ -22,7 +22,7 @@ const _dests = [
   _Dest('/campus', 'Campus', Icons.explore_outlined, Icons.explore_rounded,
       ['/campus', '/where', '/map', '/directory', '/campuses', '/requests', '/lostfound', '/announcements', '/engage']),
   _Dest('/study', 'Study', Icons.school_outlined, Icons.school_rounded,
-      ['/study', '/tutors', '/groups', '/timetable', '/buddy', '/pulse', '/courses']),
+      ['/study', '/tutors', '/groups', '/timetable', '/exams', '/buddy', '/pulse', '/courses']),
   _Dest('/profile', 'Me', Icons.person_outline_rounded, Icons.person_rounded,
       ['/profile', '/community', '/members', '/reports', '/moderation', '/install', '/notifications', '/tutor-reports', '/tutor-checks', '/insights', '/dashboard']),
 ];

@@ -1,4 +1,6 @@
 import 'community_repository.dart';
+import 'exams.dart';
+export 'exams.dart';
 import 'models.dart';
 
 /// Everything the UI needs from a backend. Two implementations:
@@ -79,6 +81,18 @@ abstract class CampusRepository {
   Future<void> replaceTimetable(List<TimetableEntry> entries);
   Future<void> addTimetableEntry(TimetableEntry e);
   Future<void> deleteTimetableEntry(String id);
+
+  // ---- exams (real dates) ----
+  /// Official papers for my units + my own entries, soonest first.
+  Future<List<ExamEntry>> myExams();
+  Future<void> addMyExam(ExamEntry e);
+  Future<void> deleteMyExam(String id);
+  /// Every official paper (for the Examinations office's list).
+  Future<List<ExamEntry>> examPapers();
+  /// Examinations office handlers and the super admin.
+  Future<bool> canManageExams();
+  Future<void> saveExamPaper(ExamEntry e);
+  Future<void> deleteExamPaper(String id);
 
   /// News, events, offices, tutors, surveys… (see community_repository.dart)
   CommunityApi get community;

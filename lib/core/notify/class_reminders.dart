@@ -1,3 +1,4 @@
+import '../../data/exams.dart';
 import '../../data/models.dart';
 
 /// One weekly reminder: fires every [weekday] (1 = Monday) at [hour]:[minute],
@@ -43,6 +44,37 @@ List<ClassReminder> planClassReminders(List<TimetableEntry> entries, int minutes
         if ((e.lecturer ?? '').trim().isNotEmpty) e.lecturer!.trim(),
       ].join(' · '),
     ));
+  }
+  return out;
+}
+
+/// One-off exam reminders live in their own id range.
+const examReminderIdBase = 80000;
+
+class ExamReminder {
+  const ExamReminder(this.id, this.at, this.title, this.body);
+  final int id;
+  final DateTime at; // Kampala wall-clock time
+  final String title, body;
+  @override
+  String toString() => '$id:${at.toIso8601String()}:$title';
+}
+
+/// The evening before (19:00) and 1 hour before each exam, future ones only.
+List<ExamReminder> planExamReminders(List<ExamEntry> exams, DateTime now) {
+  final out = <ExamReminder>[];
+  for (final e in exams) {
+    final where = [if ((e.room ?? '').isNotEmpty) e.room!, if ((e.campus ?? '').isNotEmpty) e.campus!].join(', ');
+    final eve = DateTime(e.date.year, e.date.month, e.date.day - 1, 19);
+    final hour = e.startsAt.subtract(const Duration(hours: 1));
+    if (eve.isAfter(now)) {
+      out.add(ExamReminder(examReminderIdBase + out.length, eve, 'Exam tomorrow: ${e.courseCode}',
+          'Starts ${e.start}${where.isEmpty ? '' : ' · $where'}. Bring your exam card.'));
+    }
+    if (hour.isAfter(now)) {
+      out.add(ExamReminder(examReminderIdBase + out.length, hour, 'Exam in 1 hour: ${e.courseCode}',
+          '${e.start}–${e.end}${where.isEmpty ? '' : ' · $where'}'));
+    }
   }
   return out;
 }

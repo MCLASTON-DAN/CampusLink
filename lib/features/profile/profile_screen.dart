@@ -324,6 +324,7 @@ class _ProfileHeader extends ConsumerWidget {
         Row(children: [
           GestureDetector(
             onTap: () => showModalBottomSheet(
+              useRootNavigator: true, // above the tab bar, never under it
               context: context,
               builder: (sheet) => SafeArea(
                 child: Wrap(children: [

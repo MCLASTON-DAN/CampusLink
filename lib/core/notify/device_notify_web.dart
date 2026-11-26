@@ -40,3 +40,5 @@ Future<void> deviceNotifyShow(String title, String body, {String? link}) async {
 /// Browsers cannot fire a reminder while the page is closed.
 bool get deviceCanSchedule => false;
 Future<bool> deviceScheduleClassReminders(List<ClassReminder> list, int oldCount) async => false;
+
+Future<bool> deviceScheduleExamReminders(List<ExamReminder> list, int oldCount) async => false;

@@ -77,6 +77,7 @@ void showOfficeSheet(BuildContext context, HelpOffice o) {
           ]),
         );
   showModalBottomSheet(
+    useRootNavigator: true, // above the tab bar, never under it
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

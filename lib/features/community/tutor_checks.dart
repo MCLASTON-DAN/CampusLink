@@ -42,6 +42,7 @@ class TutorLevelChip extends StatelessWidget {
 }
 
 Future<void> showTutorLevels(BuildContext context) => showModalBottomSheet(
+      useRootNavigator: true, // above the tab bar, never under it
       context: context,
       showDragHandle: true,
       builder: (sheet) => SafeArea(
@@ -307,6 +308,7 @@ class OutcomeBar extends StatelessWidget {
 
 /// Student: which band did you get in this unit? Returns the band or null.
 Future<int?> pickOutcomeBand(BuildContext context, String courseCode, {int? current}) => showModalBottomSheet<int>(
+      useRootNavigator: true, // above the tab bar, never under it
       context: context,
       showDragHandle: true,
       builder: (sheet) => SafeArea(

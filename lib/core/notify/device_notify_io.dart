@@ -143,3 +143,35 @@ Future<bool> deviceScheduleClassReminders(List<ClassReminder> list, int oldCount
     return false;
   }
 }
+
+
+/// Replaces all exam reminders with [list] (one-off, on real dates).
+Future<bool> deviceScheduleExamReminders(List<ExamReminder> list, int oldCount) async {
+  if (!deviceCanSchedule) return false;
+  try {
+    await _init();
+    if (!_tzReady) {
+      tzdata.initializeTimeZones();
+      _tzReady = true;
+    }
+    final kla = tz.getLocation('Africa/Kampala');
+    for (var i = 0; i < oldCount; i++) {
+      await _plugin.cancel(examReminderIdBase + i);
+    }
+    const details = NotificationDetails(
+      android: AndroidNotificationDetails('campuslink_exams', 'Exam reminders',
+          channelDescription: 'The evening before and 1 hour before each exam',
+          importance: Importance.high, priority: Priority.high, playSound: true),
+      iOS: DarwinNotificationDetails(presentSound: true, presentAlert: true, presentBanner: true),
+      macOS: DarwinNotificationDetails(presentSound: true, presentAlert: true, presentBanner: true),
+    );
+    for (final r in list) {
+      final when = tz.TZDateTime(kla, r.at.year, r.at.month, r.at.day, r.at.hour, r.at.minute);
+      await _plugin.zonedSchedule(r.id, r.title, r.body, when, details,
+          androidScheduleMode: AndroidScheduleMode.inexactAllowWhileIdle, payload: '/exams');
+    }
+    return true;
+  } catch (_) {
+    return false;
+  }
+}

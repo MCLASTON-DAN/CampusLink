@@ -24,6 +24,7 @@ Future<void> showNewRequestSheet(BuildContext context, WidgetRef ref, {String? o
   String? error;
 
   final created = await showModalBottomSheet<HelpRequest>(
+    useRootNavigator: true, // above the tab bar, never under it
     context: context,
     isScrollControlled: true,
     showDragHandle: true,

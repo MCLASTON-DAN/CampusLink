@@ -390,4 +390,35 @@ class LocalRepository implements CampusRepository {
     _timetable.removeWhere((e) => e.id == id);
     await _save();
   }
+
+  // ---- exams (demo) ----
+  final _papers = <ExamEntry>[];
+  final _mine = <ExamEntry>[];
+
+  @override
+  Future<List<ExamEntry>> myExams() => _tick(mergeMyExams(
+      official: _papers, mine: _mine, myUnits: {for (final t in _timetable) t.courseCode}));
+
+  @override
+  Future<void> addMyExam(ExamEntry e) async => _mine.add(e);
+
+  @override
+  Future<void> deleteMyExam(String id) async => _mine.removeWhere((e) => e.id == id);
+
+  @override
+  Future<List<ExamEntry>> examPapers() => _tick([..._papers]..sort((a, b) => a.startsAt.compareTo(b.startsAt)));
+
+  @override
+  Future<bool> canManageExams() async => _user?.isSuperAdmin ?? false;
+
+  @override
+  Future<void> saveExamPaper(ExamEntry e) async {
+    if (!(_user?.isSuperAdmin ?? false)) throw Exception('Only the Examinations office can change official papers.');
+    _papers
+      ..removeWhere((x) => x.id == e.id)
+      ..add(ExamEntry.fromMap(e.toMap(), official: true));
+  }
+
+  @override
+  Future<void> deleteExamPaper(String id) async => _papers.removeWhere((e) => e.id == id);
 }

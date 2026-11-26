@@ -5,6 +5,8 @@ import 'package:shared_preferences/shared_preferences.dart';
 import '../../core/notify/device_notify.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
+import '../../data/exams.dart';
+import 'exams_screen.dart';
 
 /// Minutes before each class to remind (0 = off). Saved on this device.
 final classReminderMinutesProvider =
@@ -63,6 +65,21 @@ class _SyncState extends ConsumerState<ClassReminderSync> {
     } catch (_) {}
   }
 
+  String? _lastExamSig;
+  Future<void> _applyExams(List<ExamReminder> plan) async {
+    final sig = plan.join('|');
+    if (sig == _lastExamSig) return;
+    _lastExamSig = sig;
+    try {
+      final p = await SharedPreferences.getInstance();
+      if (p.getString('exam_reminder_sig') == sig) return;
+      if (await deviceScheduleExamReminders(plan, p.getInt('exam_reminder_count') ?? 40)) {
+        await p.setString('exam_reminder_sig', sig);
+        await p.setInt('exam_reminder_count', plan.length);
+      }
+    } catch (_) {}
+  }
+
   @override
   Widget build(BuildContext context) {
     if (deviceCanSchedule) {
@@ -73,6 +90,12 @@ class _SyncState extends ConsumerState<ClassReminderSync> {
       if (table case AsyncData(:final value)) {
         final plan = signedIn ? planClassReminders(value, minutes) : const <ClassReminder>[];
         WidgetsBinding.instance.addPostFrameCallback((_) => _apply(plan));
+      }
+      // Exams: always on when signed in (they matter too much to miss).
+      final exams = signedIn ? ref.watch(myExamsProvider) : const AsyncData(<ExamEntry>[]);
+      if (exams case AsyncData(:final value)) {
+        final plan = planExamReminders(value, DateTime.now());
+        WidgetsBinding.instance.addPostFrameCallback((_) => _applyExams(plan));
       }
     }
     return widget.child;

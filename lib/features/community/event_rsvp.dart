@@ -98,10 +98,12 @@ class _EventRsvpPanelState extends ConsumerState<EventRsvpPanel> {
   void _showTicket() {
     final r = _mine!;
     showModalBottomSheet(
+      useRootNavigator: true, // above the tab bar, never under it
       context: context,
       showDragHandle: true,
+      isScrollControlled: true,
       builder: (sheet) => SafeArea(
-        child: Padding(
+        child: SingleChildScrollView(
           padding: const EdgeInsets.fromLTRB(24, 0, 24, 24),
           child: Column(mainAxisSize: MainAxisSize.min, children: [
             Text('Your ticket', style: Theme.of(sheet).textTheme.titleLarge?.copyWith(fontWeight: FontWeight.w800)),
@@ -111,7 +113,10 @@ class _EventRsvpPanelState extends ConsumerState<EventRsvpPanel> {
             Container(
               padding: const EdgeInsets.all(12),
               decoration: BoxDecoration(color: Colors.white, borderRadius: BorderRadius.circular(16)),
-              child: QrImageView(data: 'campuslink:checkin:${e.id}:${r.code}', size: 220),
+              child: QrImageView(
+                data: 'campuslink:checkin:${e.id}:${r.code}',
+                size: (MediaQuery.sizeOf(sheet).width - 96).clamp(160, 240).toDouble(),
+              ),
             ),
             const SizedBox(height: 12),
             SelectableText(r.code,

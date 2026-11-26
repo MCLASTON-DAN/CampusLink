@@ -60,6 +60,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
 
   Future<void> _move(HelpRequest r, List<HelpOffice> offices) async {
     final pick = await showModalBottomSheet<HelpOffice>(
+      useRootNavigator: true, // above the tab bar, never under it
       context: context,
       showDragHandle: true,
       isScrollControlled: true,
