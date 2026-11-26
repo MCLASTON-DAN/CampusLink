@@ -66,7 +66,19 @@ jobs:
             exit 1
           fi
           cp build/app/outputs/flutter-apk/app-release.apk campuslink.apk
-          ls -lh campuslink.apk
+          # Slim copies for in-app updates: each holds only what one kind of
+          # phone needs. The website link keeps the all-in-one campuslink.apk,
+          # which works on every phone (including older 32-bit ones).
+          for pair in "arm64-v8a android-arm64" "armeabi-v7a android-arm"; do
+            set -- $pair
+            CAMPUSLINK_ABI=$1 flutter build apk --release --target-platform $2 \
+              --build-name=1.0.$BUILD --build-number=$BUILD \
+              --dart-define=APP_BUILD=$BUILD \
+              --dart-define=SUPABASE_URL=${{ secrets.SUPABASE_URL || secrets.SUPERBASE_URL }} \
+              --dart-define=SUPABASE_ANON_KEY=${{ secrets.SUPABASE_ANON_KEY }} 2>&1 | tail -3
+            cp build/app/outputs/flutter-apk/app-release.apk campuslink-$1.apk
+          done
+          ls -lh campuslink*.apk
           # The app reads this to offer the update: the SHA-256 lets the phone
           # check it downloaded the genuine file; notes fill "What's new".
           BUILD=$BUILD URL="https://github.com/${{ github.repository }}/releases/download/android-latest/campuslink.apk" \
@@ -78,8 +90,15 @@ jobs:
           except FileNotFoundError:
               notes = []
           b = int(os.environ['BUILD'])
+          base = os.environ['URL'].rsplit('/', 1)[0]
+          apks = {}
+          for abi in ('arm64-v8a', 'armeabi-v7a'):
+              data = open(f'campuslink-{abi}.apk', 'rb').read()
+              apks[abi] = {'url': f'{base}/campuslink-{abi}.apk',
+                           'sha256': hashlib.sha256(data).hexdigest(), 'size': len(data)}
           json.dump({'build': b, 'version': f'1.0.{b}', 'url': os.environ['URL'],
                      'sha256': hashlib.sha256(apk).hexdigest(), 'size': len(apk),
+                     'apks': apks,
                      'notes': notes or ['Improvements and fixes.']}, open('version.json', 'w'))
           PY
           cat version.json
@@ -94,5 +113,7 @@ jobs:
             Download campuslink.apk, open it, and allow "Install unknown apps" for your browser when asked.
           files: |
             campuslink.apk
+            campuslink-arm64-v8a.apk
+            campuslink-armeabi-v7a.apk
             version.json
           make_latest: true

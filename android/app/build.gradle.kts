@@ -51,6 +51,22 @@ android {
             signingConfig = signingConfigs.findByName("release") ?: signingConfigs.getByName("debug")
         }
     }
+
+    // Slim APK for one kind of phone processor. The release build sets
+    // CAMPUSLINK_ABI (e.g. arm64-v8a) to leave out the parts other phones
+    // need, which makes in-app updates about 3x smaller. The version number
+    // stays the same, so the all-in-one APK and the slim ones can replace
+    // each other in both directions.
+    val onlyAbi = System.getenv("CAMPUSLINK_ABI")
+    if (!onlyAbi.isNullOrBlank()) {
+        packaging {
+            jniLibs {
+                listOf("armeabi-v7a", "arm64-v8a", "x86_64", "x86")
+                    .filter { it != onlyAbi }
+                    .forEach { excludes += "lib/$it/**" }
+            }
+        }
+    }
 }
 
 kotlin {

@@ -1,6 +1,7 @@
 import 'dart:async';
 import 'dart:convert';
 
+import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart';
 import 'package:flutter/material.dart';
 import 'package:http/http.dart' as http;
@@ -39,14 +40,27 @@ class AppRelease {
     this.notes = const [],
   });
 
-  factory AppRelease.fromMap(Map<String, dynamic> m) => AppRelease(
-        build: (m['build'] as num).toInt(),
-        version: '${m['version'] ?? m['build']}',
-        url: '${m['url'] ?? AppConfig.androidApkUrl}',
-        sha256: m['sha256'] as String?,
-        sizeBytes: (m['size'] as num?)?.toInt(),
-        notes: [for (final n in (m['notes'] as List? ?? const [])) '$n'],
-      );
+  /// [abis] are the phone's processor types, best first (from Android).
+  /// When the release has a slim APK for one of them, that one is used: about
+  /// a third of the size. Otherwise the all-in-one APK.
+  factory AppRelease.fromMap(Map<String, dynamic> m, {List<String> abis = const []}) {
+    final slim = m['apks'] is Map ? Map<String, dynamic>.from(m['apks'] as Map) : const <String, dynamic>{};
+    Map<String, dynamic>? pick;
+    for (final a in abis) {
+      if (slim[a] is Map) {
+        pick = Map<String, dynamic>.from(slim[a] as Map);
+        break;
+      }
+    }
+    return AppRelease(
+      build: (m['build'] as num).toInt(),
+      version: '${m['version'] ?? m['build']}',
+      url: '${pick?['url'] ?? m['url'] ?? AppConfig.androidApkUrl}',
+      sha256: (pick?['sha256'] ?? m['sha256']) as String?,
+      sizeBytes: ((pick?['size'] ?? m['size']) as num?)?.toInt(),
+      notes: [for (final n in (m['notes'] as List? ?? const [])) '$n'],
+    );
+  }
 
   final int build;
   final String version;
@@ -121,7 +135,11 @@ class _UpdateCheckerState extends State<UpdateChecker> with WidgetsBindingObserv
       final r = await http.get(Uri.parse('$_versionUrl?t=${DateTime.now().millisecondsSinceEpoch ~/ 600000}'))
           .timeout(const Duration(seconds: 12));
       if (r.statusCode != 200) return;
-      final rel = AppRelease.fromMap(jsonDecode(r.body) as Map<String, dynamic>);
+      var abis = const <String>[];
+      try {
+        abis = (await DeviceInfoPlugin().androidInfo).supportedAbis;
+      } catch (_) {/* unknown: the all-in-one APK always works */}
+      final rel = AppRelease.fromMap(jsonDecode(r.body) as Map<String, dynamic>, abis: abis);
 
       var minBuild = 0;
       DateTime? from;

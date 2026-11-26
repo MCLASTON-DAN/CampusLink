@@ -20,6 +20,20 @@ void main() {
     expect(now.version, '170');
   });
 
+  test('picks the slim APK for this phone, else the all-in-one', () {
+    final m = {
+      'build': 130, 'url': 'all.apk', 'size': 88000000, 'sha256': 'all',
+      'apks': {
+        'arm64-v8a': {'url': 'arm64.apk', 'size': 30000000, 'sha256': 'a64'},
+        'armeabi-v7a': {'url': 'v7a.apk', 'size': 28000000, 'sha256': 'v7'},
+      },
+    };
+    expect(AppRelease.fromMap(m, abis: ['arm64-v8a', 'armeabi-v7a']).url, 'arm64.apk');
+    expect(AppRelease.fromMap(m, abis: ['armeabi-v7a', 'armeabi']).sha256, 'v7'); // 32-bit phone
+    expect(AppRelease.fromMap(m, abis: ['x86_64']).url, 'all.apk'); // Chromebook / emulator
+    expect(AppRelease.fromMap(m).sizeBytes, 88000000);
+  });
+
   testWidgets('required page cannot be left and shows what is new', (t) async {
     await t.pumpWidget(const MaterialApp(home: UpdateRequiredPage(release: rel)));
     expect(find.text('Time to update CampusLink'), findsOneWidget);

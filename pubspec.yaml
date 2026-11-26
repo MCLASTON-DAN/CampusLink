@@ -43,6 +43,7 @@ dependencies:
   timezone: ^0.10.1
   cached_network_image: ^4.0.7
   ota_update: ^7.1.0
+  device_info_plus: ^12.4.0
 
 dev_dependencies:
   flutter_test:
