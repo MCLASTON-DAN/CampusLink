@@ -1069,6 +1069,31 @@ class SupabaseCommunity implements CommunityApi {
   Future<void> answerQuestion(String questionId, int option) => writeOnce.run('answer|$questionId',
       () => _guard(() => _client.rpc('answer_post_question', params: {'p_question': questionId, 'p_option': option})));
 
+  // ---------------------------------------------------------- edits and retractions
+  @override
+  Future<void> updatePost(String id, {required String title, required String body}) => writeOnce.run('editPost|$id|$title|$body',
+      () => _guard(() => _client.from('posts').update({'title': title.trim(), 'body': body.trim()}).eq('id', id)));
+
+  @override
+  Future<void> retractPost(String id, String reason) =>
+      writeOnce.run('retractPost|$id', () => _guard(() => _client.rpc('retract_post', params: {'p_post': id, 'p_reason': reason})));
+
+  @override
+  Future<void> updateEvent(CampusEvent e) => writeOnce.run(
+      'editEvent|${e.id}|${e.title}|${e.startsAt}|${e.location}|${e.description}',
+      () => _guard(() => _client.from('events').update({
+            'title': e.title.trim(),
+            'description': e.description.trim(),
+            'starts_at': e.startsAt.toUtc().toIso8601String(),
+            'ends_at': e.endsAt?.toUtc().toIso8601String(),
+            'location': e.location,
+            'online_url': e.onlineUrl,
+          }).eq('id', e.id)));
+
+  @override
+  Future<void> cancelEvent(String id, String reason) =>
+      writeOnce.run('cancelEvent|$id', () => _guard(() => _client.rpc('cancel_event', params: {'p_event': id, 'p_reason': reason})));
+
   // ---------------------------------------------------------- tutor results
   @override
   Future<Map<String, int>> myOutcomes() => _guard(() async {

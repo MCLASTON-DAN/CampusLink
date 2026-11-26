@@ -677,4 +677,8 @@ class SupabaseRepository implements CampusRepository {
     _lastTyping = DateTime.now();
     _typingChannels[groupId]?.sendBroadcastMessage(event: 'typing', payload: {'id': _uid, 'name': _user?.fullName.split(' ').first ?? ''});
   }
+
+  @override
+  Future<void> retractAnnouncement(String id, String reason) => writeOnce.run('retractAnn|$id',
+      () => _client.rpc('retract_announcement', params: {'p_id': id, 'p_reason': reason}));
 }

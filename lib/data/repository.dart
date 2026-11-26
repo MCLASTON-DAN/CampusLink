@@ -105,6 +105,9 @@ abstract class CampusRepository {
   Stream<Set<String>> typingIn(String groupId);
   void sendTyping(String groupId);
 
+  /// Replace a wrong announcement with a public "Retracted: reason" notice (author or super admin).
+  Future<void> retractAnnouncement(String id, String reason);
+
   // ---- exams (real dates) ----
   /// Official papers for my units + my own entries, soonest first.
   Future<List<ExamEntry>> myExams();

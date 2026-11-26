@@ -1421,6 +1421,60 @@ class LocalCommunity implements CommunityApi {
     await _save();
   }
 
+  // ---------------------------------------------------------- edits and retractions (demo)
+  bool _canRetract(String? publisherId, String? authorId) =>
+      authorId == _me.id || _me.isSuperAdmin ||
+      _list('members').any((m) => m['publisher_id'] == publisherId && m['user_id'] == _me.id && (m['scopes'] as List).contains('manage_members'));
+
+  void _edit(String table, String id, Map<String, dynamic> Function(Map<String, dynamic>) f) {
+    final list = _list(table);
+    final i = list.indexWhere((r) => r['id'] == id);
+    if (i < 0) throw CommunityException('Not found.');
+    list[i] = f(Map<String, dynamic>.from(list[i]));
+    _put(table, list);
+  }
+
+  @override
+  Future<void> updatePost(String id, {required String title, required String body}) async {
+    _edit('posts', id, (p) {
+      if (p['author_id'] != _me.id) throw CommunityException('Only the author can edit a post.');
+      if (p['retracted_at'] != null) throw CommunityException('A retracted post cannot be edited. Publish a corrected post instead.');
+      return {...p, 'title': title.trim(), 'body': body.trim(), 'edited_at': DateTime.now().toIso8601String()};
+    });
+    await _save();
+  }
+
+  @override
+  Future<void> retractPost(String id, String reason) async {
+    if (reason.trim().length < 10) throw CommunityException('Say what was wrong (at least 10 letters).');
+    _edit('posts', id, (p) {
+      if (!_canRetract(p['publisher_id'], p['author_id'])) throw CommunityException('Only the author, the office lead or the super admin can retract this.');
+      return {...p, 'retracted_at': DateTime.now().toIso8601String(), 'retract_reason': reason.trim()};
+    });
+    await _save();
+  }
+
+  @override
+  Future<void> updateEvent(CampusEvent e) async {
+    _edit('events', e.id, (x) {
+      if (x['created_by'] != _me.id && !_me.isSuperAdmin) throw CommunityException('Only the organiser can edit this event.');
+      if (x['cancelled_at'] != null) throw CommunityException('A cancelled event cannot be edited.');
+      return {...x, 'title': e.title.trim(), 'description': e.description.trim(), 'starts_at': e.startsAt.toIso8601String(),
+        'ends_at': e.endsAt?.toIso8601String(), 'location': e.location, 'online_url': e.onlineUrl, 'edited_at': DateTime.now().toIso8601String()};
+    });
+    await _save();
+  }
+
+  @override
+  Future<void> cancelEvent(String id, String reason) async {
+    if (reason.trim().length < 10) throw CommunityException('Say why it is cancelled (at least 10 letters).');
+    _edit('events', id, (x) {
+      if (!_canRetract(x['publisher_id'], x['created_by'])) throw CommunityException('Only the organiser, the office lead or the super admin can cancel this.');
+      return {...x, 'cancelled_at': DateTime.now().toIso8601String(), 'cancel_reason': reason.trim()};
+    });
+    await _save();
+  }
+
   // ---------------------------------------------------------- tutor results
   @override
   Future<Map<String, int>> myOutcomes() {

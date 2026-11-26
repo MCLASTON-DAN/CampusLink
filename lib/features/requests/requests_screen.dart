@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/confirm_send.dart';
 import 'new_request_sheet.dart';
 
 Color statusColor(RequestStatus s) => switch (s) {
@@ -174,7 +175,14 @@ class TopicGroups extends ConsumerWidget {
         ),
       ),
     );
-    if (ok != true || msg.text.trim().length < 3) return;
+    if (ok != true || msg.text.trim().length < 3 || !context.mounted) return;
+    if (!await confirmBeforeSending(context,
+        title: 'Reply about: $topic',
+        preview: msg.text.trim(),
+        reach: 'All $count students who asked about this. Each one is notified.',
+        sendLabel: 'Send to all')) {
+      return;
+    }
     try {
       final n = await ref
           .read(repositoryProvider)

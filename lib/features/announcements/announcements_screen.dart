@@ -6,6 +6,7 @@ import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
+import '../../widgets/confirm_send.dart';
 
 class AnnouncementsScreen extends ConsumerStatefulWidget {
   const AnnouncementsScreen({super.key});
@@ -155,6 +156,14 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
       ),
     );
     if (ok != true || title.text.trim().isEmpty || !mounted) return;
+    if (!await confirmBeforeSending(context,
+        title: title.text.trim(),
+        preview: body.text.trim(),
+        reach: 'Everyone on CampusLink. It is an official announcement.',
+        sendLabel: 'Post')) {
+      return;
+    }
+    if (!mounted) return;
     await ref.read(repositoryProvider).postAnnouncement(Announcement(
           id: const Uuid().v4(),
           title: title.text.trim(),
@@ -196,12 +205,49 @@ class _AnnouncementCard extends StatelessWidget {
                 Text(friendlyDate(a.createdAt), style: Theme.of(context).textTheme.bodySmall),
               ],
             ),
+            if (a.isRetracted) RetractedBanner(word: 'Retracted', reason: a.retractReason),
             const SizedBox(height: 10),
-            Text(a.title, style: const TextStyle(fontWeight: FontWeight.w700, fontSize: 16)),
+            Text(a.title,
+                style: TextStyle(
+                    fontWeight: FontWeight.w700, fontSize: 16, decoration: a.isRetracted ? TextDecoration.lineThrough : null)),
             const SizedBox(height: 6),
-            Text(a.body, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4)),
+            Opacity(
+              opacity: a.isRetracted ? 0.55 : 1,
+              child: Text(a.body, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4)),
+            ),
+            EditedMark(a.editedAt),
+            if (!a.isRetracted) _RetractButton(a),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// The author or the super admin can retract a wrong announcement (with a public reason).
+class _RetractButton extends ConsumerWidget {
+  const _RetractButton(this.a);
+  final Announcement a;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserProvider).valueOrNull;
+    if (me == null || !(me.isSuperAdmin || me.id == a.authorId)) return const SizedBox.shrink();
+    return Align(
+      alignment: Alignment.centerRight,
+      child: TextButton.icon(
+        icon: const Icon(Icons.report_rounded, size: 18),
+        label: const Text('Retract'),
+        onPressed: () async {
+          final why = await askReason(context, title: 'Retract this announcement?', hint: 'e.g. The deadline is 5 Dec, not 3 Dec.');
+          if (why == null) return;
+          try {
+            await ref.read(repositoryProvider).retractAnnouncement(a.id, why);
+            ref.invalidate(announcementsProvider);
+          } catch (e) {
+            if (context.mounted) showSnack(context, '$e'.replaceFirst('Exception: ', '').replaceFirst(RegExp(r'^.*?: '), ''));
+          }
+        },
       ),
     );
   }

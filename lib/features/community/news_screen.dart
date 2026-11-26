@@ -11,6 +11,7 @@ import '../../data/providers.dart';
 import '../../widgets/badge.dart';
 import '../../widgets/section.dart';
 import '../../widgets/common.dart';
+import '../../widgets/confirm_send.dart';
 import '../../widgets/media.dart';
 import '../../core/image_tools.dart';
 import 'policy_gate.dart';
@@ -168,7 +169,7 @@ class PostCard extends StatelessWidget {
                 Flexible(child: _KindPill(p)),
                 const SizedBox(width: 8),
                 Expanded(
-                  child: Text('${friendlyDate(p.publishedAt)}${p.isEdited ? ' · edited' : ''}',
+                  child: Text('${friendlyDate(p.publishedAt)}${p.isRetracted ? ' · RETRACTED' : p.isEdited ? ' · edited' : ''}',
                       style: t.bodySmall, maxLines: 1, overflow: TextOverflow.ellipsis),
                 ),
               ]),
@@ -258,8 +259,9 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
     final me = ref.watch(currentUserProvider).valueOrNull;
     return Scaffold(
       appBar: AppBar(title: const Text('News'), actions: [
-        if (p != null)
+        if (p != null && !p.isRetracted)
           IconButton(tooltip: 'Share', icon: const Icon(Icons.share_rounded), onPressed: () => sharePost(context, p)),
+        if (p != null && !p.isRetracted) _PostMenu(post: p, onChanged: _load),
       ]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
@@ -271,8 +273,9 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
                     const SizedBox(height: 16),
                   ],
                   NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: Theme.of(context).textTheme.titleSmall),
-                  Text('${p.kindLabel} · ${friendlyDate(p.publishedAt)}${p.isEdited ? ' · edited' : ''}',
-                      style: Theme.of(context).textTheme.bodySmall),
+                  Text('${p.kindLabel} · ${friendlyDate(p.publishedAt)}', style: Theme.of(context).textTheme.bodySmall),
+                  EditedMark(p.editedAt),
+                  if (p.isRetracted) RetractedBanner(word: 'Retracted', by: p.publisherName, reason: p.retractReason),
                   if (_views != null)
                     InkWell(
                       onTap: () => context.push('/insights'),
@@ -287,9 +290,12 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
                       ),
                     ),
                   const SizedBox(height: 10),
-                  Text(p.title, style: Theme.of(context).textTheme.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  Text(p.title,
+                      style: Theme.of(context).textTheme.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800, decoration: p.isRetracted ? TextDecoration.lineThrough : null)),
                   const SizedBox(height: 10),
-                  SelectableText(p.body),
+                  // A retracted post stays readable (people should see what was wrong), but faded.
+                  Opacity(opacity: p.isRetracted ? 0.55 : 1, child: SelectableText(p.body)),
                   const SizedBox(height: 12),
                   Card(
                     child: ListTile(
@@ -675,6 +681,20 @@ class _ComposeState extends ConsumerState<ComposePostScreen> {
         return;
       }
     }
+    if (_createdId == null &&
+        !await confirmBeforeSending(context,
+            title: _title.text.trim(),
+            preview: _body.text.trim(),
+            reach: 'Everyone on CampusLink, as ${_mem!.publisherName}. It is official and can be shared.',
+            checks: const [
+              'Names, dates, times and places are right',
+              'The source is stated and real',
+              'Spelling is right, and it is fair and true',
+            ],
+            sendLabel: 'Publish')) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _busy = true);
     final api = ref.read(communityProvider);
     try {
@@ -893,6 +913,69 @@ class _StoryGuideState extends State<_StoryGuide> {
         const SizedBox(height: 4),
         const Text('You can still edit everything before posting.', textAlign: TextAlign.center, style: TextStyle(fontSize: 12)),
       ]),
+    );
+  }
+}
+
+
+/// Author: Edit. Author, office lead or super admin: Retract.
+class _PostMenu extends ConsumerWidget {
+  const _PostMenu({required this.post, required this.onChanged});
+  final Post post;
+  final Future<void> Function() onChanged;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserProvider).valueOrNull;
+    final mems = ref.watch(myMembershipsProvider).valueOrNull ?? const <Membership>[];
+    final author = me?.id == post.authorId;
+    final lead = mems.any((m) => m.isActive && m.publisherId == post.publisherId && m.can('manage_members'));
+    final canRetract = author || lead || (me?.isSuperAdmin ?? false);
+    if (!author && !canRetract) return const SizedBox.shrink();
+    final api = ref.read(communityProvider);
+    return PopupMenuButton<String>(
+      onSelected: (v) async {
+        try {
+          if (v == 'edit') {
+            final t = TextEditingController(text: post.title), b = TextEditingController(text: post.body);
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => AlertDialog(
+                title: const Text('Edit post'),
+                content: SingleChildScrollView(
+                  child: Column(mainAxisSize: MainAxisSize.min, children: [
+                    const Text('Everyone will see "Edited". The old version is kept for your office lead.'),
+                    TextField(controller: t, decoration: const InputDecoration(labelText: 'Title')),
+                    TextField(controller: b, minLines: 4, maxLines: 12, decoration: const InputDecoration(labelText: 'Text')),
+                  ]),
+                ),
+                actions: [
+                  TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                  FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save changes')),
+                ],
+              ),
+            );
+            if (ok != true || !context.mounted) return;
+            if (!await confirmBeforeSending(context, title: t.text.trim(), preview: b.text.trim(),
+                reach: 'Everyone who can see this post. It will show "Edited".', sendLabel: 'Save changes')) {
+              return;
+            }
+            await api.updatePost(post.id, title: t.text, body: b.text);
+          } else {
+            final why = await askReason(context, title: 'Retract this post?', hint: 'e.g. The date was wrong. The talk is on Friday, not Thursday.');
+            if (why == null) return;
+            await api.retractPost(post.id, why);
+          }
+          await onChanged();
+          ref.invalidate(postsProvider);
+        } on CommunityException catch (e) {
+          if (context.mounted) showSnack(context, e.message);
+        }
+      },
+      itemBuilder: (_) => [
+        if (author) const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_rounded), title: Text('Edit'))),
+        if (canRetract)
+          const PopupMenuItem(value: 'retract', child: ListTile(leading: Icon(Icons.report_rounded), title: Text('Retract (it was wrong)'))),
+      ],
     );
   }
 }

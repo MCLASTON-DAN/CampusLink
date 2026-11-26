@@ -6,6 +6,7 @@ import 'package:url_launcher/url_launcher.dart';
 
 import '../../data/community_models.dart';
 import '../../data/providers.dart';
+import '../../widgets/confirm_send.dart';
 import '../../widgets/badge.dart';
 import '../../widgets/person_picker.dart';
 import '../../widgets/section.dart';
@@ -162,6 +163,14 @@ class _ComposeState extends ConsumerState<ComposeCourseNoticeScreen> {
       return;
     }
     if (!_form.currentState!.validate()) return;
+    if (!await confirmBeforeSending(context,
+        title: _title.text.trim(),
+        preview: _body.text.trim(),
+        reach: 'Every student taking ${codes.join(', ')}. They get a notification.',
+        checks: const ['The units are right', 'Dates, rooms and deadlines are right', 'Spelling is right'])) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _sending = true);
     try {
       await ref.read(communityProvider).sendCourseNotice(

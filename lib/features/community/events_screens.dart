@@ -14,6 +14,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/badge.dart';
 import '../../widgets/common.dart';
+import '../../widgets/confirm_send.dart';
 import '../../widgets/media.dart';
 import '../../widgets/section.dart';
 import '../../core/image_tools.dart';
@@ -159,12 +160,17 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
   @override
   void initState() {
     super.initState();
-    ref.read(communityProvider).event(widget.eventId).then((e) {
-      if (mounted) setState(() {
+    _load();
+  }
+
+  Future<void> _load() async {
+    final e = await ref.read(communityProvider).event(widget.eventId);
+    if (mounted) {
+      setState(() {
         _e = e;
         _loading = false;
       });
-    });
+    }
   }
 
   @override
@@ -173,7 +179,9 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
     final me = ref.watch(currentUserProvider).valueOrNull;
     final t = Theme.of(context).textTheme;
     return Scaffold(
-      appBar: AppBar(title: const Text('Event')),
+      appBar: AppBar(title: const Text('Event'), actions: [
+        if (e != null && !e.isCancelled) _EventMenu(event: e, onChanged: _load),
+      ]),
       body: _loading
           ? const Center(child: CircularProgressIndicator())
           : e == null
@@ -183,9 +191,13 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
                     MediaBanner(coverUrl: e.coverPath, radius: 16, full: true),
                     const SizedBox(height: 16),
                   ],
-                  Text(e.title, style: t.headlineSmall?.copyWith(fontWeight: FontWeight.w800)),
+                  if (e.isCancelled) RetractedBanner(word: 'Cancelled', by: e.publisherName, reason: e.cancelReason),
+                  Text(e.title,
+                      style: t.headlineSmall?.copyWith(
+                          fontWeight: FontWeight.w800, decoration: e.isCancelled ? TextDecoration.lineThrough : null)),
                   const SizedBox(height: 4),
                   NameWithBadge('By ${e.publisherName}', e.badge, style: t.titleSmall),
+                  EditedMark(e.editedAt),
                   const SizedBox(height: 10),
                   Card(
                     child: ListTile(
@@ -197,7 +209,7 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
                   ),
                   if (e.isMajor) const Padding(padding: EdgeInsets.only(top: 4), child: StatusChip('Major event · approved by the super admin', color: Colors.amber)),
                   const SizedBox(height: 8),
-                  EventRsvpPanel(event: e),
+                  if (!e.isCancelled) EventRsvpPanel(event: e),
                   if ((e.topic ?? '').isNotEmpty) ...[const SizedBox(height: 12), Text('What it is about', style: t.titleSmall), Text(e.topic!)],
                   if ((e.impact ?? '').isNotEmpty) ...[const SizedBox(height: 12), Text('How it helps you', style: t.titleSmall), Text(e.impact!)],
                   if (e.description.isNotEmpty) ...[const SizedBox(height: 12), Text(e.description)],
@@ -336,6 +348,15 @@ class _ComposeEventState extends ConsumerState<ComposeEventScreen> {
     if (_title.text.trim().length < 4) return showSnack(context, 'Give the event a name.');
     if (_loc.text.trim().isEmpty && _url.text.trim().isEmpty) return showSnack(context, 'Add a place or an online link.');
     if (_major && _reason.text.trim().length < 30) return showSnack(context, 'Explain why it is major (30+ letters).');
+    if (!await confirmBeforeSending(context,
+        title: _title.text.trim(),
+        preview: '${eventDate(_start)} · ${_loc.text.trim().isEmpty ? 'Online' : _loc.text.trim()}',
+        reach: 'Everyone on CampusLink. People plan their day around it.',
+        checks: const ['The date and time are right', 'The room and campus are right', 'The title is spelled right'],
+        sendLabel: 'Publish event')) {
+      return;
+    }
+    if (!mounted) return;
     setState(() => _busy = true);
     try {
       await ref.read(communityProvider).createEvent(CampusEvent(
@@ -475,6 +496,90 @@ class EventCard extends StatelessWidget {
           ),
         ]),
       ),
+    );
+  }
+}
+
+
+/// Organiser: Edit. Organiser, office lead or super admin: Cancel event.
+class _EventMenu extends ConsumerWidget {
+  const _EventMenu({required this.event, required this.onChanged});
+  final CampusEvent event;
+  final Future<void> Function() onChanged;
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final me = ref.watch(currentUserProvider).valueOrNull;
+    final mems = ref.watch(myMembershipsProvider).valueOrNull ?? const <Membership>[];
+    final organiser = me?.id == event.createdBy;
+    final lead = mems.any((m) => m.isActive && m.publisherId == event.publisherId && m.can('manage_members'));
+    final canCancel = organiser || lead || (me?.isSuperAdmin ?? false);
+    if (!organiser && !canCancel) return const SizedBox.shrink();
+    final api = ref.read(communityProvider);
+    return PopupMenuButton<String>(
+      onSelected: (v) async {
+        try {
+          if (v == 'edit') {
+            final t = TextEditingController(text: event.title), d = TextEditingController(text: event.description);
+            final loc = TextEditingController(text: event.location);
+            var start = event.startsAt;
+            final ok = await showDialog<bool>(
+              context: context,
+              builder: (ctx) => StatefulBuilder(
+                builder: (ctx, setS) => AlertDialog(
+                  title: const Text('Edit event'),
+                  content: SingleChildScrollView(
+                    child: Column(mainAxisSize: MainAxisSize.min, children: [
+                      const Text('Everyone sees "Edited". If you change the time or place, people who said "I\'m going" are told.'),
+                      TextField(controller: t, decoration: const InputDecoration(labelText: 'Title')),
+                      ListTile(
+                        contentPadding: EdgeInsets.zero,
+                        leading: const Icon(Icons.schedule_rounded),
+                        title: Text(eventDate(start)),
+                        onTap: () async {
+                          final day = await showDatePicker(context: ctx, initialDate: start, firstDate: DateTime.now().subtract(const Duration(days: 1)), lastDate: DateTime.now().add(const Duration(days: 400)));
+                          if (day == null || !ctx.mounted) return;
+                          final time = await showTimePicker(context: ctx, initialTime: TimeOfDay.fromDateTime(start));
+                          if (time == null) return;
+                          setS(() => start = DateTime(day.year, day.month, day.day, time.hour, time.minute));
+                        },
+                      ),
+                      TextField(controller: loc, decoration: const InputDecoration(labelText: 'Place')),
+                      TextField(controller: d, minLines: 3, maxLines: 8, decoration: const InputDecoration(labelText: 'Details')),
+                    ]),
+                  ),
+                  actions: [
+                    TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+                    FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Save changes')),
+                  ],
+                ),
+              ),
+            );
+            if (ok != true || !context.mounted) return;
+            final moved = start != event.startsAt || loc.text.trim() != (event.location ?? '');
+            if (!await confirmBeforeSending(context,
+                title: t.text.trim(),
+                preview: '${eventDate(start)} · ${loc.text.trim().isEmpty ? 'Online' : loc.text.trim()}',
+                reach: moved ? 'Everyone, and a notice to people who said "I\'m going".' : 'Everyone who can see this event.',
+                sendLabel: 'Save changes')) {
+              return;
+            }
+            await api.updateEvent(event.copyWith(
+                title: t.text, description: d.text, startsAt: start, location: loc.text.trim().isEmpty ? null : loc.text.trim()));
+          } else {
+            final why = await askReason(context, title: 'Cancel this event?', hint: 'e.g. The speaker cannot travel. New date coming soon.', action: 'Cancel event');
+            if (why == null) return;
+            await api.cancelEvent(event.id, why);
+          }
+          await onChanged();
+          ref.invalidate(eventsProvider);
+        } on CommunityException catch (e) {
+          if (context.mounted) showSnack(context, e.message);
+        }
+      },
+      itemBuilder: (_) => [
+        if (organiser) const PopupMenuItem(value: 'edit', child: ListTile(leading: Icon(Icons.edit_rounded), title: Text('Edit'))),
+        if (canCancel) const PopupMenuItem(value: 'cancel', child: ListTile(leading: Icon(Icons.event_busy_rounded), title: Text('Cancel event'))),
+      ],
     );
   }
 }

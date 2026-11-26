@@ -518,4 +518,10 @@ class LocalRepository implements CampusRepository {
 
   @override
   void sendTyping(String groupId) {}
+
+  @override
+  Future<void> retractAnnouncement(String id, String reason) async {
+    if (reason.trim().length < 10) throw Exception('Say what was wrong (at least 10 letters).');
+    if (!(_user?.isSuperAdmin ?? false)) throw Exception('Only the author or the super admin can retract this.');
+  }
 }

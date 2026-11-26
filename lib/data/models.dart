@@ -163,6 +163,11 @@ class Announcement {
   final String audience;
   final bool isPinned;
   final DateTime createdAt;
+  final String? authorId;
+  final DateTime? editedAt;
+  final DateTime? retractedAt;
+  final String? retractReason;
+  bool get isRetracted => retractedAt != null;
 
   const Announcement({
     required this.id,
@@ -172,6 +177,10 @@ class Announcement {
     this.audience = 'all',
     this.isPinned = false,
     required this.createdAt,
+    this.authorId,
+    this.editedAt,
+    this.retractedAt,
+    this.retractReason,
   });
 
   factory Announcement.fromMap(Map<String, dynamic> m) => Announcement(
@@ -182,6 +191,10 @@ class Announcement {
         audience: m['audience'] ?? 'all',
         isPinned: m['is_pinned'] ?? false,
         createdAt: _dt(m['created_at']),
+        authorId: m['author_id'],
+        editedAt: m['edited_at'] == null ? null : DateTime.parse(m['edited_at'].toString()).toLocal(),
+        retractedAt: m['retracted_at'] == null ? null : DateTime.parse(m['retracted_at'].toString()).toLocal(),
+        retractReason: m['retract_reason'],
       );
 
   Map<String, dynamic> toMap() => {
@@ -645,6 +658,14 @@ class CampusEvent {
   final int comments;
   final bool likedByMe;
 
+  /// Set when the organiser changed the title, text, time or place.
+  final DateTime? editedAt;
+
+  /// Set when the event was cancelled; [cancelReason] says why (shown to all).
+  final DateTime? cancelledAt;
+  final String? cancelReason;
+  bool get isCancelled => cancelledAt != null;
+
   const CampusEvent({
     required this.id,
     required this.title,
@@ -668,6 +689,9 @@ class CampusEvent {
     this.likes = 0,
     this.comments = 0,
     this.likedByMe = false,
+    this.editedAt,
+    this.cancelledAt,
+    this.cancelReason,
   });
 
   String? get badge => badgeForKind(publisherKind);
@@ -681,6 +705,10 @@ class CampusEvent {
   }
 
   CampusEvent copyWith({
+    String? title,
+    String? description,
+    DateTime? startsAt,
+    String? location,
     String? majorStatus,
     List<EventSpeaker>? speakers,
     int? likes,
@@ -690,11 +718,12 @@ class CampusEvent {
   }) =>
       CampusEvent(
         id: id,
-        title: title,
-        description: description,
-        startsAt: startsAt,
-        endsAt: endsAt,
-        location: location,
+        title: title ?? this.title,
+        description: description ?? this.description,
+        startsAt: startsAt ?? this.startsAt,
+        // Moving the start keeps the same length.
+        endsAt: startsAt == null || endsAt == null ? endsAt : startsAt.add(endsAt!.difference(this.startsAt)),
+        location: location ?? this.location,
         organiser: organiser,
         publisherId: publisherId,
         publisherName: publisherName,
@@ -711,6 +740,9 @@ class CampusEvent {
         likes: likes ?? this.likes,
         comments: comments ?? this.comments,
         likedByMe: likedByMe ?? this.likedByMe,
+        editedAt: editedAt,
+        cancelledAt: cancelledAt,
+        cancelReason: cancelReason,
       );
 
   factory CampusEvent.fromMap(Map<String, dynamic> m) => CampusEvent(
@@ -738,6 +770,9 @@ class CampusEvent {
         likes: (m['likes'] ?? 0) as int,
         comments: (m['comments'] ?? 0) as int,
         likedByMe: m['liked_by_me'] ?? false,
+        editedAt: m['edited_at'] == null ? null : DateTime.parse(m['edited_at'].toString()).toLocal(),
+        cancelledAt: m['cancelled_at'] == null ? null : DateTime.parse(m['cancelled_at'].toString()).toLocal(),
+        cancelReason: m['cancel_reason'],
       );
 
   Map<String, dynamic> toMap() => {
@@ -757,6 +792,9 @@ class CampusEvent {
         'online_url': onlineUrl,
         'cover_path': coverPath,
         'status': status,
+        'edited_at': editedAt?.toIso8601String(),
+        'cancelled_at': cancelledAt?.toIso8601String(),
+        'cancel_reason': cancelReason,
         'major_status': majorStatus,
         'major_reason': majorReason,
         'speakers': speakers.map((e) => e.toMap()).toList(),

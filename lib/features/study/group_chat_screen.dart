@@ -10,6 +10,7 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
+import '../../widgets/confirm_send.dart';
 
 final _membersProvider = FutureProvider.autoDispose.family((ref, String id) => ref.watch(repositoryProvider).groupMembers(id));
 final _asksProvider = FutureProvider.autoDispose.family((ref, String id) => ref.watch(repositoryProvider).groupJoinRequests(id));
@@ -94,6 +95,16 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     final body = _text.text.trim();
     if (body.isEmpty || _sending) return;
     final found = parseMentions(body, members);
+    // @all alerts everyone: read it once more. Normal chat stays instant.
+    if (found.all &&
+        !await confirmBeforeSending(context,
+            title: 'Message to everyone',
+            preview: body,
+            reach: 'All ${members.length} members get a notification.',
+            checks: const ['It is worth alerting everyone']) ) {
+      return;
+    }
+    if (!mounted) return;
     final reply = _replyTo;
     setState(() {
       _sending = true;

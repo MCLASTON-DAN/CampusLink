@@ -87,6 +87,16 @@ abstract class CommunityApi {
   Future<List<CampusEvent>> upcomingEvents();
   Future<List<CampusEvent>> featuredEvents();
   Future<CampusEvent> createEvent(CampusEvent e);
+
+  // ---- honest edits and retractions ----
+  /// The author fixes their post. Everyone sees "Edited"; the old version is kept.
+  Future<void> updatePost(String id, {required String title, required String body});
+  /// Replace a wrong post with a public "Retracted: reason" notice (author, office lead, super admin).
+  Future<void> retractPost(String id, String reason);
+  /// The organiser fixes the event. People who RSVP'd hear about a new time or place.
+  Future<void> updateEvent(CampusEvent e);
+  /// Cancel with a reason everyone sees; people who RSVP'd are told.
+  Future<void> cancelEvent(String id, String reason);
   /// Super admin only: approved | rejected.
   Future<void> setMajorStatus(String eventId, String status);
   Future<List<CampusEvent>> majorRequests();

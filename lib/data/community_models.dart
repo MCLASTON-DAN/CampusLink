@@ -150,6 +150,11 @@ class Post {
   final String status;
   final DateTime publishedAt;
   final DateTime? editedAt;
+
+  /// Set when the post was retracted; [retractReason] is shown to everyone.
+  final DateTime? retractedAt;
+  final String? retractReason;
+  bool get isRetracted => retractedAt != null;
   final DateTime? expiresAt;
   final int likes;
   final int comments;
@@ -174,6 +179,8 @@ class Post {
     this.status = 'published',
     required this.publishedAt,
     this.editedAt,
+    this.retractedAt,
+    this.retractReason,
     this.expiresAt,
     this.likes = 0,
     this.comments = 0,
@@ -214,6 +221,8 @@ class Post {
         status: status,
         publishedAt: publishedAt,
         editedAt: editedAt,
+        retractedAt: retractedAt,
+        retractReason: retractReason,
         expiresAt: expiresAt,
         likes: likes ?? this.likes,
         comments: comments ?? this.comments,
@@ -239,6 +248,8 @@ class Post {
         status: m['status'] ?? 'published',
         publishedAt: _dt(m['published_at']),
         editedAt: _dtn(m['edited_at']),
+        retractedAt: _dtn(m['retracted_at']),
+        retractReason: m['retract_reason'],
         expiresAt: _dtn(m['expires_at']),
         likes: (m['likes'] ?? 0) as int,
         comments: (m['comments'] ?? 0) as int,
@@ -264,6 +275,8 @@ class Post {
         'status': status,
         'published_at': publishedAt.toIso8601String(),
         'edited_at': editedAt?.toIso8601String(),
+        'retracted_at': retractedAt?.toIso8601String(),
+        'retract_reason': retractReason,
         'expires_at': expiresAt?.toIso8601String(),
       };
 }
