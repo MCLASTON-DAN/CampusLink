@@ -7,6 +7,8 @@ import '../../data/providers.dart';
 import '../../data/repository.dart';
 import '../../widgets/common.dart';
 import '../requests/new_request_sheet.dart';
+import 'exam_import.dart';
+import 'package:file_picker/file_picker.dart';
 
 final myExamsProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).myExams());
 final _papersProvider = FutureProvider.autoDispose((ref) => ref.watch(repositoryProvider).examPapers());
@@ -27,6 +29,7 @@ class ExamsScreen extends ConsumerWidget {
     return Scaffold(
       appBar: AppBar(title: const Text('My exams'), actions: [
         IconButton(tooltip: 'Refresh', onPressed: () => ref.invalidate(myExamsProvider), icon: const Icon(Icons.refresh_rounded)),
+        IconButton(tooltip: 'Import from Excel or CSV', onPressed: () => importExams(context, ref, official: false), icon: const Icon(Icons.upload_file_rounded)),
         if (canManage)
           IconButton(
             tooltip: 'Official exam list',
@@ -148,7 +151,12 @@ class ExamPapersScreen extends ConsumerWidget {
     }
 
     return Scaffold(
-      appBar: AppBar(title: const Text('Official exam list')),
+      appBar: AppBar(title: const Text('Official exam list'), actions: [
+        IconButton(
+            tooltip: 'Import the official Excel file',
+            onPressed: () => importExams(context, ref, official: true),
+            icon: const Icon(Icons.upload_file_rounded)),
+      ]),
       floatingActionButton: FloatingActionButton.extended(
           onPressed: () => save(null), icon: const Icon(Icons.add_rounded), label: const Text('Add paper')),
       body: AsyncBody(
@@ -272,4 +280,94 @@ Future<ExamEntry?> examForm(BuildContext context, {required bool official, ExamE
 TimeOfDay _tod(String hhmm) {
   final p = hhmm.split(':');
   return TimeOfDay(hour: int.tryParse(p.first) ?? 9, minute: p.length > 1 ? int.tryParse(p[1]) ?? 0 : 0);
+}
+
+
+/// Import exams from the official Excel/CSV, like the class timetable:
+/// pick your group(s), see what will be added, save. Already-known exams are skipped.
+Future<void> importExams(BuildContext context, WidgetRef ref, {required bool official}) async {
+  final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xlsm', 'csv', 'tsv'], withData: true);
+  final f = res?.files.firstOrNull;
+  if (f?.bytes == null || !context.mounted) return;
+  List<ExamGroup> groups;
+  try {
+    groups = ExamImporter.readGroups(f!.bytes!, fileName: f.name);
+  } catch (e) {
+    showSnack(context, '$e'.replaceFirst('Unsupported operation: ', ''));
+    return;
+  }
+  if (groups.isEmpty) {
+    showSnack(context, 'No exams with dates found. The file needs a Date column (and Time, Code). Send it to support if it looks right.');
+    return;
+  }
+  final me = ref.read(currentUserProvider).valueOrNull;
+  final suggested = ExamImporter.suggest(groups, programme: me?.programme, year: me?.yearOfStudy).toSet();
+  final picked = <ExamGroup>{...(official ? groups : suggested)};
+  final ok = await showModalBottomSheet<bool>(
+    useRootNavigator: true, // above the tab bar, never under it
+    context: context,
+    isScrollControlled: true,
+    showDragHandle: true,
+    builder: (sheet) => StatefulBuilder(
+      builder: (sheet, setS) {
+        final count = picked.fold<int>(0, (n, g) => n + g.entries.length);
+        return SafeArea(
+          child: ConstrainedBox(
+            constraints: BoxConstraints(maxHeight: MediaQuery.sizeOf(sheet).height * 0.85),
+            child: Column(mainAxisSize: MainAxisSize.min, children: [
+              ListTile(
+                title: Text(official ? 'Import for everyone' : 'Which are yours?', style: const TextStyle(fontWeight: FontWeight.w800)),
+                subtitle: Text(official
+                    ? 'Every student taking these units will see their exams and get reminders.'
+                    : (suggested.isEmpty ? 'Tick your programme and year.' : 'We ticked the ones that match your programme and year.')),
+              ),
+              Flexible(
+                child: ListView(shrinkWrap: true, children: [
+                  for (final g in groups)
+                    CheckboxListTile(
+                      value: picked.contains(g),
+                      onChanged: (v) => setS(() => v == true ? picked.add(g) : picked.remove(g)),
+                      title: Text(g.label),
+                      subtitle: Text('${g.entries.length} exams · ${g.entries.map((e) => e.courseCode).take(4).join(', ')}${g.entries.length > 4 ? '…' : ''}'),
+                    ),
+                ]),
+              ),
+              Padding(
+                padding: const EdgeInsets.all(16),
+                child: FilledButton(
+                  onPressed: count == 0 ? null : () => Navigator.pop(sheet, true),
+                  child: Text('Add $count exams'),
+                ),
+              ),
+            ]),
+          ),
+        );
+      },
+    ),
+  );
+  if (ok != true || !context.mounted) return;
+  final repo = ref.read(repositoryProvider);
+  final have = official ? await repo.examPapers() : await repo.myExams();
+  String key(ExamEntry e) => '${e.courseCode.replaceAll(' ', '')}|${e.date.toIso8601String().substring(0, 10)}|${e.start}';
+  final known = {for (final e in have) key(e)};
+  var added = 0, skipped = 0;
+  try {
+    for (final g in picked) {
+      for (final e in g.entries) {
+        if (!known.add(key(e))) {
+          skipped++;
+          continue;
+        }
+        official ? await repo.saveExamPaper(ExamEntry.fromMap(e.toMap(), official: true)) : await repo.addMyExam(e);
+        added++;
+      }
+    }
+  } catch (e) {
+    if (context.mounted) showSnack(context, 'Stopped after $added: ${'$e'.replaceFirst('Exception: ', '')}');
+  }
+  ref.invalidate(myExamsProvider);
+  ref.invalidate(_papersProvider);
+  if (context.mounted) {
+    showSnack(context, 'Added $added exams${skipped > 0 ? ' · $skipped were already there' : ''}.');
+  }
 }

@@ -30,8 +30,8 @@ class TimetableGroup {
 class TimetableImporter {
   static const _uuid = Uuid();
 
-  /// Reads a whole file into pickable groups.
-  static List<TimetableGroup> readGroups(Uint8List bytes, {required String fileName}) {
+  /// Every sheet of a CSV or Excel file as rows of trimmed text.
+  static Map<String, List<List<String>>> readSheets(Uint8List bytes, {required String fileName}) {
     final lower = fileName.toLowerCase();
     final Map<String, List<List<String>>> sheets;
     if (lower.endsWith('.csv') || lower.endsWith('.tsv') || lower.endsWith('.txt')) {
@@ -51,6 +51,16 @@ class TimetableImporter {
         'Export your PDF/Word timetable to Excel or CSV first, or add classes manually.',
       );
     }
+
+    return sheets;
+  }
+
+  /// Public form of the slot reader: "08:00-10:00", "9.00am - 12.00pm".
+  static (String, String)? parseSlot(String s) => _slot(s);
+
+  /// Reads a whole file into pickable groups.
+  static List<TimetableGroup> readGroups(Uint8List bytes, {required String fileName}) {
+    final sheets = readSheets(bytes, fileName: fileName);
 
     final official = <TimetableGroup>[];
     final other = <TimetableGroup>[];
