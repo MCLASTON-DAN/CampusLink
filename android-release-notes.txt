@@ -1,3 +1,4 @@
-Clear dates on every post: "Yesterday at 14:30", "24 Nov at 14:30"
-Tap any time to see the full date
-Day headings in group chats
+Six reactions: tap for 👍, press and hold for ❤️ 😂 😮 🎉 😢
+Reply to comments and mention people with @username
+Reminder one hour before events you're going to
+Staff see "Seen by" on announcements and can remind once

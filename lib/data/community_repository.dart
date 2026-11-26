@@ -61,7 +61,7 @@ abstract class CommunityApi {
 
   // ---- comments, likes, reports ----
   Future<List<Comment>> comments(String targetType, String targetId);
-  Future<void> addComment(String targetType, String targetId, String body);
+  Future<void> addComment(String targetType, String targetId, String body, {String? parentId});
   Future<void> deleteComment(String id);
   /// Returns true when the item is now liked.
   Future<bool> toggleLike(String targetType, String targetId);

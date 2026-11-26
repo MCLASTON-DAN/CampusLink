@@ -291,6 +291,7 @@ class Comment {
   final String? officeTitle;
   final String body;
   final DateTime createdAt;
+  final String? parentId; // set on replies (one level deep)
 
   const Comment({
     required this.id,
@@ -302,6 +303,7 @@ class Comment {
     this.officeTitle,
     required this.body,
     required this.createdAt,
+    this.parentId,
   });
 
   factory Comment.fromMap(Map<String, dynamic> m) => Comment(
@@ -314,10 +316,12 @@ class Comment {
         officeTitle: m['office_title'],
         body: m['body'] ?? '',
         createdAt: _dt(m['created_at']),
+        parentId: m['parent_id'],
       );
 
   Map<String, dynamic> toMap() => {
         'id': id,
+        'parent_id': parentId,
         'target_type': targetType,
         'target_id': targetId,
         'author_id': authorId,

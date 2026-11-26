@@ -318,8 +318,13 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> addComment(String targetType, String targetId, String body) => writeOnce.run('comment|$targetType|$targetId|$body',
-      () => _guard(() => _client.from('comments').insert({'target_type': targetType, 'target_id': targetId, 'body': body.trim()})));
+  Future<void> addComment(String targetType, String targetId, String body, {String? parentId}) =>
+      writeOnce.run('comment|$targetType|$targetId|$parentId|$body', () => _guard(() => _client.from('comments').insert({
+            'target_type': targetType,
+            'target_id': targetId,
+            'body': body.trim(),
+            if (parentId != null) 'parent_id': parentId,
+          })));
 
   @override
   Future<void> deleteComment(String id) =>

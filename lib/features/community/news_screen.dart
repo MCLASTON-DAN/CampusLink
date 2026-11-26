@@ -16,6 +16,7 @@ import '../../widgets/media.dart';
 import '../../core/image_tools.dart';
 import 'policy_gate.dart';
 import 'post_questions.dart';
+import 'social.dart';
 import '../../core/config.dart';
 
 const _filters = <String?, String>{
@@ -348,9 +349,6 @@ class Reactions extends ConsumerStatefulWidget {
 }
 
 class _ReactionsState extends ConsumerState<Reactions> {
-  late int _likes = widget.likes;
-  late bool _liked = widget.liked;
-
   Future<String?> _ask(String title, int min) async {
     final c = TextEditingController();
     final ok = await showDialog<bool>(
@@ -375,22 +373,8 @@ class _ReactionsState extends ConsumerState<Reactions> {
   @override
   Widget build(BuildContext context) {
     final api = ref.read(communityProvider);
-    return Wrap(spacing: 8, children: [
-      TextButton.icon(
-        onPressed: () async {
-          try {
-            final now = await api.toggleLike(widget.targetType, widget.targetId);
-            if (mounted) setState(() {
-              _liked = now;
-              _likes += now ? 1 : -1;
-            });
-          } on CommunityException catch (e) {
-            if (mounted) showSnack(context, e.message);
-          }
-        },
-        icon: Icon(_liked ? Icons.favorite : Icons.favorite_border),
-        label: Text('$_likes'),
-      ),
+    return Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      ReactionBar(targetType: widget.targetType, targetId: widget.targetId, likes: widget.likes, liked: widget.liked),
       TextButton.icon(
         onPressed: () async {
           final r = await _ask('Why are you reporting this?', 10);
@@ -424,86 +408,12 @@ class _ReactionsState extends ConsumerState<Reactions> {
   }
 }
 
-class CommentsSection extends ConsumerStatefulWidget {
+/// Kept as a name other screens use; the thread lives in social.dart.
+class CommentsSection extends StatelessWidget {
   const CommentsSection({super.key, required this.targetType, required this.targetId});
   final String targetType, targetId;
   @override
-  ConsumerState<CommentsSection> createState() => _CommentsState();
-}
-
-class _CommentsState extends ConsumerState<CommentsSection> {
-  List<Comment> _list = [];
-  final _c = TextEditingController();
-  bool _busy = false;
-
-  @override
-  void initState() {
-    super.initState();
-    _load();
-  }
-
-  Future<void> _load() async {
-    final l = await ref.read(communityProvider).comments(widget.targetType, widget.targetId);
-    if (mounted) setState(() => _list = l);
-  }
-
-  @override
-  Widget build(BuildContext context) {
-    final me = ref.watch(currentUserProvider).valueOrNull;
-    final api = ref.read(communityProvider);
-    return Column(crossAxisAlignment: CrossAxisAlignment.start, children: [
-      Text('Comments (${_list.length})', style: Theme.of(context).textTheme.titleMedium),
-      const SizedBox(height: 4),
-      Text('Comments always show your real name.', style: Theme.of(context).textTheme.bodySmall),
-      for (final c in _list)
-        ListTile(
-          contentPadding: EdgeInsets.zero,
-          title: NameWithBadge(c.authorName, c.badge, style: const TextStyle(fontWeight: FontWeight.w700)),
-          subtitle: Text(c.body),
-          trailing: (me?.id == c.authorId || (me?.isStaff ?? false))
-              ? IconButton(
-                  icon: const Icon(Icons.delete_outline, size: 20),
-                  onPressed: () async {
-                    try {
-                      if (me?.id == c.authorId) {
-                        await api.deleteComment(c.id);
-                      } else {
-                        await api.moderate(
-                            action: 'remove',
-                            targetType: 'comment',
-                            targetId: c.id,
-                            reason: 'Removed by staff for breaking the posting code');
-                      }
-                      _load();
-                    } on CommunityException catch (e) {
-                      if (mounted) showSnack(context, e.message);
-                    }
-                  },
-                )
-              : null,
-        ),
-      Row(children: [
-        Expanded(child: TextField(controller: _c, maxLength: 500, decoration: const InputDecoration(hintText: 'Write a comment'))),
-        IconButton.filled(
-          onPressed: _busy
-              ? null
-              : () async {
-                  if (_c.text.trim().isEmpty) return;
-                  setState(() => _busy = true);
-                  try {
-                    await api.addComment(widget.targetType, widget.targetId, _c.text);
-                    _c.clear();
-                    await _load();
-                  } on CommunityException catch (e) {
-                    if (mounted) showSnack(context, e.message);
-                  }
-                  if (mounted) setState(() => _busy = false);
-                },
-          icon: const Icon(Icons.send_rounded),
-        ),
-      ]),
-    ]);
-  }
+  Widget build(BuildContext context) => CommentThread(targetType: targetType, targetId: targetId);
 }
 
 // ------------------------------------------------------------- compose

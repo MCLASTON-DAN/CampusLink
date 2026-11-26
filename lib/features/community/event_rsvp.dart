@@ -60,7 +60,7 @@ class _EventRsvpPanelState extends ConsumerState<EventRsvpPanel> {
           _mine = r;
           _counts = (_counts.$1 + 1, _counts.$2);
         });
-        _say('You\'re going. Show your ticket at the door.');
+        _say('You\'re going. We\'ll remind you an hour before. Show your ticket at the door.');
       } else {
         await api.cancelRsvp(e.id);
         if (!mounted) return;

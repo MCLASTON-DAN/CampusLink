@@ -459,7 +459,7 @@ class LocalCommunity implements CommunityApi {
   }
 
   @override
-  Future<void> addComment(String targetType, String targetId, String body) async {
+  Future<void> addComment(String targetType, String targetId, String body, {String? parentId}) async {
     final text = body.trim();
     if (text.isEmpty || text.length > 1000) throw CommunityException('Comments must be 1–1000 characters');
     final hourAgo = DateTime.now().subtract(const Duration(hours: 1));
@@ -476,6 +476,7 @@ class LocalCommunity implements CommunityApi {
         authorName: _me.fullName,
         body: text,
         createdAt: DateTime.now(),
+        parentId: parentId,
       ).toMap());
     _put('comments', list);
     await _save();

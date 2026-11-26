@@ -7,6 +7,14 @@ import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
 import '../../widgets/confirm_send.dart';
+import '../community/social.dart';
+
+/// "Seen by" numbers for a set of announcements (only authors and staff get rows back).
+final _seenProvider = FutureProvider.autoDispose.family<Map<String, (int, DateTime?)>, String>(
+    (ref, key) => key.isEmpty ? Future.value(const {}) : SocialApi.instance.seenCounts(key.split(',')));
+
+/// Announcements already marked as seen in this session, so we tell the server once.
+final _recorded = <String>{};
 
 class AnnouncementsScreen extends ConsumerStatefulWidget {
   const AnnouncementsScreen({super.key});
@@ -29,6 +37,17 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
       'programme' => u.programme == parts[1],
       _ => true,
     };
+  }
+
+  /// Tells the server which notices this person has now seen (after the frame, once each).
+  void _markSeen(List<Announcement> shown) {
+    if (!SocialApi.instance.live) return;
+    final fresh = [for (final a in shown) if (!_recorded.contains(a.id)) a.id];
+    if (fresh.isEmpty) return;
+    _recorded.addAll(fresh);
+    WidgetsBinding.instance.addPostFrameCallback((_) {
+      SocialApi.instance.recordAnnouncementViews(fresh).catchError((_) => _recorded.removeAll(fresh));
+    });
   }
 
   @override
@@ -79,13 +98,19 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
                 if (shown.isEmpty) {
                   return const EmptyState(icon: Icons.campaign_rounded, title: 'Nothing here yet');
                 }
+                _markSeen(shown);
+                final seenKey = user?.isStaff == true && SocialApi.instance.live ? (shown.map((a) => a.id).toList()..sort()).join(',') : '';
+                final seen = ref.watch(_seenProvider(seenKey)).valueOrNull ?? const {};
                 return RefreshIndicator(
-                  onRefresh: () async => ref.invalidate(announcementsProvider),
+                  onRefresh: () async {
+                    ref.invalidate(announcementsProvider);
+                    ref.invalidate(_seenProvider);
+                  },
                   child: ListView.separated(
                     padding: const EdgeInsets.all(16),
                     itemCount: shown.length,
                     separatorBuilder: (_, __) => const SizedBox(height: 10),
-                    itemBuilder: (_, i) => _AnnouncementCard(shown[i]),
+                    itemBuilder: (_, i) => _AnnouncementCard(shown[i], seen: seen[shown[i].id]),
                   ),
                 );
               },
@@ -180,8 +205,9 @@ class _AnnouncementsScreenState extends ConsumerState<AnnouncementsScreen> {
 }
 
 class _AnnouncementCard extends StatelessWidget {
-  const _AnnouncementCard(this.a);
+  const _AnnouncementCard(this.a, {this.seen});
   final Announcement a;
+  final (int, DateTime?)? seen;
 
   @override
   Widget build(BuildContext context) {
@@ -216,6 +242,7 @@ class _AnnouncementCard extends StatelessWidget {
               child: Text(a.body, style: TextStyle(color: Theme.of(context).colorScheme.onSurfaceVariant, height: 1.4)),
             ),
             EditedMark(a.editedAt),
+            if (seen != null) _SeenRow(a, seen!),
             if (!a.isRetracted) _RetractButton(a),
           ],
         ),
@@ -224,6 +251,71 @@ class _AnnouncementCard extends StatelessWidget {
   }
 }
 
+/// "Seen by N" for staff, plus a one-time nudge to everyone who has not opened it yet.
+class _SeenRow extends ConsumerStatefulWidget {
+  const _SeenRow(this.a, this.seen);
+  final Announcement a;
+  final (int, DateTime?) seen;
+  @override
+  ConsumerState<_SeenRow> createState() => _SeenRowState();
+}
+
+class _SeenRowState extends ConsumerState<_SeenRow> {
+  bool _busy = false;
+  DateTime? _sentAt;
+
+  Future<void> _remind() async {
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => AlertDialog(
+        title: const Text('Remind people?'),
+        content: const Text('Everyone it was meant for who has not opened it gets one alert. You can only do this once per announcement.'),
+        actions: [
+          TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+          FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send reminder')),
+        ],
+      ),
+    );
+    if (ok != true) return;
+    setState(() => _busy = true);
+    try {
+      final n = await SocialApi.instance.remindAnnouncement(widget.a.id);
+      if (!mounted) return;
+      setState(() => _sentAt = DateTime.now());
+      showSnack(context, n == 0 ? 'Everyone has already seen it.' : 'Reminder sent to $n ${n == 1 ? 'person' : 'people'}.');
+    } catch (e) {
+      if (mounted) showSnack(context, '$e'.contains('already') ? 'A reminder was already sent.' : 'Could not send the reminder.');
+    } finally {
+      if (mounted) setState(() => _busy = false);
+    }
+  }
+
+  @override
+  Widget build(BuildContext context) {
+    final me = ref.watch(currentUserProvider).valueOrNull;
+    final (n, remindedAt) = widget.seen;
+    final when = _sentAt ?? remindedAt;
+    final canRemind = !widget.a.isRetracted && me != null && (me.isSuperAdmin || me.id == widget.a.authorId);
+    final style = Theme.of(context).textTheme.bodySmall;
+    return Padding(
+      padding: const EdgeInsets.only(top: 8),
+      child: Row(children: [
+        const Icon(Icons.visibility_outlined, size: 16),
+        const SizedBox(width: 4),
+        Text('Seen by $n', style: style),
+        const Spacer(),
+        if (when != null)
+          Text('Reminded ${friendlyDate(when)}', style: style)
+        else if (canRemind)
+          TextButton.icon(
+            onPressed: _busy ? null : _remind,
+            icon: const Icon(Icons.notifications_active_outlined, size: 18),
+            label: const Text("Remind those who haven't seen it"),
+          ),
+      ]),
+    );
+  }
+}
 
 /// The author or the super admin can retract a wrong announcement (with a public reason).
 class _RetractButton extends ConsumerWidget {
