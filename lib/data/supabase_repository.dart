@@ -11,6 +11,7 @@ import 'community_supabase.dart';
 import 'models.dart';
 import 'offline_cache.dart';
 import 'repository.dart';
+import 'write_once.dart';
 
 /// Live backend. Table/column names match supabase/migrations/0001_*.sql.
 class SupabaseRepository implements CampusRepository {
@@ -33,9 +34,7 @@ class SupabaseRepository implements CampusRepository {
     final fromGoogle = Uri.base.queryParameters.containsKey('code') || Uri.base.fragment.contains('access_token');
     if (fromGoogle && _client.auth.currentSession == null) {
       try {
-        await _client.auth.onAuthStateChange
-            .firstWhere((s) => s.session != null)
-            .timeout(const Duration(seconds: 8));
+        await _client.auth.onAuthStateChange.firstWhere((s) => s.session != null).timeout(const Duration(seconds: 8));
       } catch (_) {/* sign-in failed or slow: show the sign-in page */}
     }
     try {
@@ -62,11 +61,7 @@ class SupabaseRepository implements CampusRepository {
     try {
       final row = await _client.from('profiles').select().eq('id', u.id).maybeSingle();
       // Badge and office come from the public view (they are worked out, not stored).
-      final pub = await _client
-          .from('public_profiles')
-          .select('badge, office_title, office_name')
-          .eq('id', u.id)
-          .maybeSingle();
+      final pub = await _client.from('public_profiles').select('badge, office_title, office_name').eq('id', u.id).maybeSingle();
       if (row == null) {
         _user = Profile(id: u.id, fullName: u.userMetadata?['full_name'] ?? u.email ?? '');
       } else {
@@ -197,17 +192,16 @@ class SupabaseRepository implements CampusRepository {
   // ---- announcements ----
   @override
   Future<List<Announcement>> announcements() async {
-    final rows = await _client
-        .from('announcements')
-        .select()
-        .order('is_pinned', ascending: false)
-        .order('created_at', ascending: false);
+    final rows = await _client.from('announcements').select().order('is_pinned', ascending: false).order('created_at', ascending: false);
     return rows.map(Announcement.fromMap).toList();
   }
 
   @override
-  Future<void> postAnnouncement(Announcement a) =>
-      _client.from('announcements').insert(a.toMap()..remove('id')..['author_id'] = _uid);
+  Future<void> postAnnouncement(Announcement a) => writeOnce.run(
+      'announcement|${a.title}|${a.body}',
+      () => _client.from('announcements').insert(a.toMap()
+        ..remove('id')
+        ..['author_id'] = _uid));
 
   // ---- offices ----
   @override
@@ -225,11 +219,7 @@ class SupabaseRepository implements CampusRepository {
 
   @override
   Future<List<RequestUpdate>> requestUpdates(String requestId) async {
-    final rows = await _client
-        .from('help_request_updates')
-        .select()
-        .eq('request_id', requestId)
-        .order('created_at');
+    final rows = await _client.from('help_request_updates').select().eq('request_id', requestId).order('created_at');
     return rows.map(RequestUpdate.fromMap).toList();
   }
 
@@ -242,7 +232,9 @@ class SupabaseRepository implements CampusRepository {
     try {
       final row = await _client
           .from('help_requests')
-          .insert(r.toMap()..remove('created_at')..remove('updated_at'))
+          .insert(r.toMap()
+            ..remove('created_at')
+            ..remove('updated_at'))
           .select()
           .single();
       return HelpRequest.fromMap(row);
@@ -254,30 +246,34 @@ class SupabaseRepository implements CampusRepository {
   }
 
   @override
-  Future<void> moveRequest(String requestId, String? officeId, String officeName) async {
-    await _client.from('help_requests').update({'office_id': officeId}).eq('id', requestId);
-    await _client.from('help_request_updates').insert({
-      'request_id': requestId,
-      'author_id': _uid,
-      'message': 'Sent to $officeName.',
-    });
-  }
+  Future<void> moveRequest(String requestId, String? officeId, String officeName) =>
+      writeOnce.run('moveRequest|$requestId|$officeId', () async {
+        await _client.from('help_requests').update({'office_id': officeId}).eq('id', requestId);
+        await _client.from('help_request_updates').insert({
+          'request_id': requestId,
+          'author_id': _uid,
+          'message': 'Sent to $officeName.',
+        });
+      });
 
   @override
-  Future<void> addRequestUpdate(RequestUpdate u, {RequestStatus? newStatus}) async {
-    await _client.from('help_request_updates').insert({
-      'request_id': u.requestId,
-      'author_id': _uid,
-      'message': u.message,
-      'new_status': newStatus?.db,
-    });
-    if (newStatus != null) {
-      await _client.from('help_requests').update({
-        'status': newStatus.db,
-        'updated_at': DateTime.now().toIso8601String(),
-      }).eq('id', u.requestId);
-    }
-  }
+  Future<void> addRequestUpdate(RequestUpdate u, {RequestStatus? newStatus}) =>
+      writeOnce.run('requestUpdate|${u.requestId}|${u.message}|${newStatus?.name}', () async {
+        // Status first: setting the same status twice changes nothing, so if
+        // the line below fails and you retry, you never get the line twice.
+        if (newStatus != null) {
+          await _client.from('help_requests').update({
+            'status': newStatus.db,
+            'updated_at': DateTime.now().toIso8601String(),
+          }).eq('id', u.requestId);
+        }
+        await _client.from('help_request_updates').insert({
+          'request_id': u.requestId,
+          'author_id': _uid,
+          'message': u.message,
+          'new_status': newStatus?.db,
+        });
+      });
 
   // ---- study ----
   @override
@@ -290,36 +286,39 @@ class SupabaseRepository implements CampusRepository {
   Future<List<StudyGroup>> studyGroups() async {
     final rows = await _client.from('study_groups').select('*, study_group_members(user_id)');
     return rows.map((m) {
-      final members = (m['study_group_members'] as List? ?? const [])
-          .map((e) => e['user_id'].toString())
-          .toList();
+      final members = (m['study_group_members'] as List? ?? const []).map((e) => e['user_id'].toString()).toList();
       return StudyGroup.fromMap({...m, 'member_ids': members});
     }).toList();
   }
 
   @override
-  Future<StudyGroup> createStudyGroup(StudyGroup g) async {
-    final row = await _client
-        .from('study_groups')
-        .insert(g.toMap()..remove('id')..remove('member_ids')..['owner_id'] = _uid)
-        .select()
-        .single();
-    await _client.from('study_group_members').insert({'group_id': row['id'], 'user_id': _uid});
-    return StudyGroup.fromMap({...row, 'member_ids': [_uid]});
-  }
+  Future<StudyGroup> createStudyGroup(StudyGroup g) => writeOnce.run('studyGroup|${g.name}|${g.courseCode}', () async {
+        final row = await _client
+            .from('study_groups')
+            .insert(g.toMap()
+              ..remove('id')
+              ..remove('member_ids')
+              ..['owner_id'] = _uid)
+            .select()
+            .single();
+        await _client.from('study_group_members').insert({'group_id': row['id'], 'user_id': _uid});
+        return StudyGroup.fromMap({
+          ...row,
+          'member_ids': [_uid]
+        });
+      });
 
   @override
-  Future<void> toggleGroupMembership(String groupId, bool join) async {
-    if (join) {
-      await _client.from('study_group_members').upsert({'group_id': groupId, 'user_id': _uid});
-    } else {
-      await _client.from('study_group_members').delete().match({'group_id': groupId, 'user_id': _uid});
-    }
-  }
+  Future<void> toggleGroupMembership(String groupId, bool join) => writeOnce.run('groupJoin|$groupId|$join', () async {
+        if (join) {
+          await _client.from('study_group_members').upsert({'group_id': groupId, 'user_id': _uid});
+        } else {
+          await _client.from('study_group_members').delete().match({'group_id': groupId, 'user_id': _uid});
+        }
+      }, toggle: true);
 
   // ---- pulse ----
-  String _voterHash(String pollId) =>
-      sha256.convert(utf8.encode('$_uid:$pollId')).toString();
+  String _voterHash(String pollId) => sha256.convert(utf8.encode('$_uid:$pollId')).toString();
 
   @override
   Future<List<PulsePoll>> polls() async {
@@ -340,11 +339,13 @@ class SupabaseRepository implements CampusRepository {
   }
 
   @override
-  Future<void> vote(String pollId, int optionIndex) => _client.from('pulse_votes').upsert({
-        'poll_id': pollId,
-        'voter_hash': _voterHash(pollId),
-        'option_index': optionIndex,
-      });
+  Future<void> vote(String pollId, int optionIndex) => writeOnce.run(
+      'pulseVote|$pollId',
+      () => _client.from('pulse_votes').upsert({
+            'poll_id': pollId,
+            'voter_hash': _voterHash(pollId),
+            'option_index': optionIndex,
+          }));
 
   // ---- buddy ----
   @override
@@ -360,30 +361,30 @@ class SupabaseRepository implements CampusRepository {
   }
 
   @override
-  Future<BuddyPair> requestBuddy() async {
-    // Simple matching: pick a mentor with the fewest active mentees.
-    final mentorsRows = await _client.from('profiles').select('id').eq('is_buddy_mentor', true);
-    final pairs = await _client.from('buddy_pairs').select('mentor_id').eq('status', 'matched');
-    String? best;
-    var bestLoad = 1 << 30;
-    for (final m in mentorsRows) {
-      final load = pairs.where((p) => p['mentor_id'] == m['id']).length;
-      if (load < bestLoad) {
-        bestLoad = load;
-        best = m['id'];
-      }
-    }
-    final row = await _client
-        .from('buddy_pairs')
-        .insert({
-          'mentee_id': _uid,
-          'mentor_id': best,
-          'status': best == null ? 'waiting' : 'matched',
-        })
-        .select()
-        .single();
-    return BuddyPair.fromMap(row);
-  }
+  Future<BuddyPair> requestBuddy() => writeOnce.run('buddy', () async {
+        // Simple matching: pick a mentor with the fewest active mentees.
+        final mentorsRows = await _client.from('profiles').select('id').eq('is_buddy_mentor', true);
+        final pairs = await _client.from('buddy_pairs').select('mentor_id').eq('status', 'matched');
+        String? best;
+        var bestLoad = 1 << 30;
+        for (final m in mentorsRows) {
+          final load = pairs.where((p) => p['mentor_id'] == m['id']).length;
+          if (load < bestLoad) {
+            bestLoad = load;
+            best = m['id'];
+          }
+        }
+        final row = await _client
+            .from('buddy_pairs')
+            .insert({
+              'mentee_id': _uid,
+              'mentor_id': best,
+              'status': best == null ? 'waiting' : 'matched',
+            })
+            .select()
+            .single();
+        return BuddyPair.fromMap(row);
+      });
 
   @override
   Future<List<Profile>> mentors() async {
@@ -393,8 +394,8 @@ class SupabaseRepository implements CampusRepository {
 
   // ---- engagement ----
   @override
-  Future<void> submitFeedback({required String topic, required String message, String? sentiment}) =>
-      _client.from('feedback').insert({'topic': topic, 'message': message, 'sentiment': sentiment});
+  Future<void> submitFeedback({required String topic, required String message, String? sentiment}) => writeOnce.run(
+      'feedback|$topic|$message', () => _client.from('feedback').insert({'topic': topic, 'message': message, 'sentiment': sentiment}));
 
   @override
   Future<List<CampusEvent>> events() => community.upcomingEvents();
@@ -408,11 +409,7 @@ class SupabaseRepository implements CampusRepository {
   // ---- timetable ----
   @override
   Future<List<TimetableEntry>> timetable() async {
-    final rows = await _client
-        .from('timetable_entries')
-        .select()
-        .order('day_of_week')
-        .order('start_time');
+    final rows = await _client.from('timetable_entries').select().order('day_of_week').order('start_time');
     return rows.map(TimetableEntry.fromMap).toList();
   }
 
@@ -433,10 +430,9 @@ class SupabaseRepository implements CampusRepository {
   }
 
   @override
-  Future<void> addTimetableEntry(TimetableEntry e) =>
-      _client.from('timetable_entries').insert(e.toMap()..['user_id'] = _uid);
+  Future<void> addTimetableEntry(TimetableEntry e) => writeOnce.run('timetableAdd|${e.dayOfWeek}|${e.startTime}|${e.courseCode}',
+      () => _client.from('timetable_entries').insert(e.toMap()..['user_id'] = _uid));
 
   @override
-  Future<void> deleteTimetableEntry(String id) =>
-      _client.from('timetable_entries').delete().eq('id', id);
+  Future<void> deleteTimetableEntry(String id) => _client.from('timetable_entries').delete().eq('id', id);
 }

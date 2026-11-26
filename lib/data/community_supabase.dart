@@ -7,6 +7,7 @@ import 'package:uuid/uuid.dart';
 import 'community_models.dart';
 import 'community_repository.dart';
 import 'models.dart';
+import 'write_once.dart';
 
 /// Live backend for the community features. Table, view and function names
 /// match supabase/migrations/0002_* and 0003_*. Security is enforced by the
@@ -34,16 +35,19 @@ class SupabaseCommunity implements CommunityApi {
       if (m.contains('duplicate key')) throw CommunityException('That already exists.');
       throw CommunityException(m);
     } on StorageException catch (e) {
-      throw CommunityException(e.message.contains('size') || e.message.contains('large')
-          ? 'That file is too big.'
-          : 'Could not upload the file: ${e.message}');
+      throw CommunityException(
+          e.message.contains('size') || e.message.contains('large') ? 'That file is too big.' : 'Could not upload the file: ${e.message}');
     } on CommunityException {
       rethrow;
     } catch (e) {
       // No signal, timeouts, server unreachable: never leave a button spinning.
       final t = '$e'.toLowerCase();
-      if (t.contains('socket') || t.contains('network') || t.contains('failed host') ||
-          t.contains('clientexception') || t.contains('timeout') || t.contains('connection')) {
+      if (t.contains('socket') ||
+          t.contains('network') ||
+          t.contains('failed host') ||
+          t.contains('clientexception') ||
+          t.contains('timeout') ||
+          t.contains('connection')) {
         throw CommunityException('No internet connection. Check your data or Wi-Fi and try again.');
       }
       throw CommunityException('Something went wrong. Please try again.');
@@ -55,10 +59,7 @@ class SupabaseCommunity implements CommunityApi {
   /// Offices by id. Reloaded when the person changes, and whenever a post
   /// names an office we have not seen (e.g. one created after the app opened).
   Future<Map<String, Publisher>> _pubs([Iterable<String> need = const []]) async {
-    final stale = _publishers == null ||
-        _publishers!.isEmpty ||
-        _pubsFor != _uid ||
-        need.any((id) => !_publishers!.any((p) => p.id == id));
+    final stale = _publishers == null || _publishers!.isEmpty || _pubsFor != _uid || need.any((id) => !_publishers!.any((p) => p.id == id));
     if (stale) {
       _publishers = (await _client.from('publishers').select()).map(Publisher.fromMap).toList();
       _pubsFor = _uid;
@@ -70,35 +71,27 @@ class SupabaseCommunity implements CommunityApi {
   Future<Map<String, Map<String, dynamic>>> _people(Iterable<String> ids) async {
     final list = ids.where((e) => e.isNotEmpty).toSet().toList();
     if (list.isEmpty) return {};
-    final rows = await _client
-        .from('public_profiles')
-        .select('id, full_name, username, office_title, office_name, badge')
-        .inFilter('id', list);
+    final rows =
+        await _client.from('public_profiles').select('id, full_name, username, office_title, office_name, badge').inFilter('id', list);
     return {for (final r in rows) r['id'] as String: Map<String, dynamic>.from(r)};
   }
 
-  String _publicUrl(String? path) =>
-      path == null || path.isEmpty ? '' : _client.storage.from('campus-media').getPublicUrl(path);
+  String _publicUrl(String? path) => path == null || path.isEmpty ? '' : _client.storage.from('campus-media').getPublicUrl(path);
 
   Future<Map<String, Map<String, int>>> _stats(Iterable<String> ids) async {
     final list = ids.toList();
     if (list.isEmpty) return {};
     final rows = await _client.from('content_stats').select().inFilter('target_id', list);
     return {
-      for (final r in rows)
-        r['target_id'] as String: {'likes': (r['likes'] as num).toInt(), 'comments': (r['comments'] as num).toInt()}
+      for (final r in rows) r['target_id'] as String: {'likes': (r['likes'] as num).toInt(), 'comments': (r['comments'] as num).toInt()}
     };
   }
 
   Future<Set<String>> _myLikes(String type, Iterable<String> ids) async {
     final list = ids.toList();
     if (list.isEmpty || _uid.isEmpty) return {};
-    final rows = await _client
-        .from('reactions')
-        .select('target_id')
-        .eq('user_id', _uid)
-        .eq('target_type', type)
-        .inFilter('target_id', list);
+    final rows =
+        await _client.from('reactions').select('target_id').eq('user_id', _uid).eq('target_type', type).inFilter('target_id', list);
     return rows.map((r) => r['target_id'] as String).toSet();
   }
 
@@ -175,11 +168,7 @@ class SupabaseCommunity implements CommunityApi {
   @override
   Future<List<Membership>> membersOf(String publisherId) => _guard(() async {
         final pubs = await _pubs();
-        final rows = await _client
-            .from('publisher_members')
-            .select()
-            .eq('publisher_id', publisherId)
-            .order('expires_at', ascending: false);
+        final rows = await _client.from('publisher_members').select().eq('publisher_id', publisherId).order('expires_at', ascending: false);
         final people = await _people(rows.map((r) => r['user_id'] as String));
         return rows
             .map((r) => Membership.fromMap({
@@ -207,41 +196,40 @@ class SupabaseCommunity implements CommunityApi {
     required List<String> scopes,
     required DateTime expiresAt,
   }) =>
-      _guard(() async {
-        if (userId == _uid) throw CommunityException('You cannot appoint yourself.');
-        await _client.from('publisher_members').insert({
-          'publisher_id': publisherId,
-          'user_id': userId,
-          'position_title': positionTitle.trim(),
-          'scopes': scopes,
-          'expires_at': expiresAt.toUtc().toIso8601String(),
-          'appointed_by': _uid,
-        });
-      });
+      writeOnce.run(
+          'appoint|$publisherId|$userId',
+          () => _guard(() async {
+                if (userId == _uid) throw CommunityException('You cannot appoint yourself.');
+                await _client.from('publisher_members').insert({
+                  'publisher_id': publisherId,
+                  'user_id': userId,
+                  'position_title': positionTitle.trim(),
+                  'scopes': scopes,
+                  'expires_at': expiresAt.toUtc().toIso8601String(),
+                  'appointed_by': _uid,
+                });
+              }));
 
   @override
-  Future<void> endTerm(String membershipId, {required String kind, required String reason}) => _guard(() => _client
-      .from('publisher_members')
-      .update({
-        'revoked_at': DateTime.now().toUtc().toIso8601String(),
-        'end_kind': kind,
-        'end_reason': reason.trim(),
-      }).eq('id', membershipId));
+  Future<void> endTerm(String membershipId, {required String kind, required String reason}) => writeOnce.run(
+      'endTerm|$membershipId',
+      () => _guard(() => _client.from('publisher_members').update({
+            'revoked_at': DateTime.now().toUtc().toIso8601String(),
+            'end_kind': kind,
+            'end_reason': reason.trim(),
+          }).eq('id', membershipId)));
 
   @override
-  Future<void> renewTerm(String membershipId, DateTime newEnd) => _guard(() => _client
-      .from('publisher_members')
-      .update({'expires_at': newEnd.toUtc().toIso8601String()}).eq('id', membershipId));
+  Future<void> renewTerm(String membershipId, DateTime newEnd) => writeOnce.run(
+      'renewTerm|$membershipId|$newEnd',
+      () =>
+          _guard(() => _client.from('publisher_members').update({'expires_at': newEnd.toUtc().toIso8601String()}).eq('id', membershipId)));
 
   @override
   Future<List<Membership>> officeHistory() => _guard(() async {
         final pubs = await _pubs();
-        final rows = await _client
-            .from('publisher_members')
-            .select()
-            .not('revoked_at', 'is', null)
-            .order('revoked_at', ascending: false)
-            .limit(100);
+        final rows =
+            await _client.from('publisher_members').select().not('revoked_at', 'is', null).order('revoked_at', ascending: false).limit(100);
         final people = await _people(rows.map((r) => r['user_id'] as String));
         return rows
             .map((r) => Membership.fromMap({
@@ -284,26 +272,28 @@ class SupabaseCommunity implements CommunityApi {
     DateTime? expiresAt,
     String? correctsPostId,
   }) =>
-      _guard(() async {
-        final row = await _client
-            .from('posts')
-            .insert({
-              'publisher_id': publisherId,
-              'author_id': _uid,
-              'kind': kind,
-              'title': title.trim(),
-              'body': body.trim(),
-              'source_note': sourceNote.trim(),
-              if (videoUrl != null && videoUrl.isNotEmpty) 'video_url': videoUrl,
-              if (meetingUrl != null && meetingUrl.isNotEmpty) 'meeting_url': meetingUrl,
-              if (coverPath != null && coverPath.isNotEmpty) 'cover_path': coverPath,
-              if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
-              if (correctsPostId != null) 'corrects_post_id': correctsPostId,
-            })
-            .select(_postSelect)
-            .single();
-        return (await _postsFrom([Map<String, dynamic>.from(row)])).first;
-      });
+      writeOnce.run(
+          'post|$publisherId|$title|$body',
+          () => _guard(() async {
+                final row = await _client
+                    .from('posts')
+                    .insert({
+                      'publisher_id': publisherId,
+                      'author_id': _uid,
+                      'kind': kind,
+                      'title': title.trim(),
+                      'body': body.trim(),
+                      'source_note': sourceNote.trim(),
+                      if (videoUrl != null && videoUrl.isNotEmpty) 'video_url': videoUrl,
+                      if (meetingUrl != null && meetingUrl.isNotEmpty) 'meeting_url': meetingUrl,
+                      if (coverPath != null && coverPath.isNotEmpty) 'cover_path': coverPath,
+                      if (expiresAt != null) 'expires_at': expiresAt.toUtc().toIso8601String(),
+                      if (correctsPostId != null) 'corrects_post_id': correctsPostId,
+                    })
+                    .select(_postSelect)
+                    .single();
+                return (await _postsFrom([Map<String, dynamic>.from(row)])).first;
+              }));
 
   // ------------------------------------------------ comments, likes, reports
   @override
@@ -328,40 +318,36 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> addComment(String targetType, String targetId, String body) => _guard(() => _client
-      .from('comments')
-      .insert({'target_type': targetType, 'target_id': targetId, 'body': body.trim()}));
+  Future<void> addComment(String targetType, String targetId, String body) => writeOnce.run('comment|$targetType|$targetId|$body',
+      () => _guard(() => _client.from('comments').insert({'target_type': targetType, 'target_id': targetId, 'body': body.trim()})));
 
   @override
   Future<void> deleteComment(String id) =>
-      _guard(() => _client.from('comments').delete().eq('id', id).eq('author_id', _uid));
+      writeOnce.run('deleteComment|$id', () => _guard(() => _client.from('comments').delete().eq('id', id).eq('author_id', _uid)));
 
   @override
-  Future<bool> toggleLike(String targetType, String targetId) => _guard(() async {
-        final existing = await _client
-            .from('reactions')
-            .select('target_id')
-            .eq('user_id', _uid)
-            .eq('target_type', targetType)
-            .eq('target_id', targetId)
-            .maybeSingle();
-        if (existing != null) {
-          await _client
-              .from('reactions')
-              .delete()
-              .eq('user_id', _uid)
-              .eq('target_type', targetType)
-              .eq('target_id', targetId);
-          return false;
-        }
-        await _client.from('reactions').insert({'target_type': targetType, 'target_id': targetId});
-        return true;
-      });
+  Future<bool> toggleLike(String targetType, String targetId) => writeOnce.run(
+      'like|$targetType|$targetId',
+      () => _guard(() async {
+            final existing = await _client
+                .from('reactions')
+                .select('target_id')
+                .eq('user_id', _uid)
+                .eq('target_type', targetType)
+                .eq('target_id', targetId)
+                .maybeSingle();
+            if (existing != null) {
+              await _client.from('reactions').delete().eq('user_id', _uid).eq('target_type', targetType).eq('target_id', targetId);
+              return false;
+            }
+            await _client.from('reactions').insert({'target_type': targetType, 'target_id': targetId});
+            return true;
+          }),
+      toggle: true);
 
   @override
-  Future<void> report(String targetType, String targetId, String reason) => _guard(() => _client
-      .from('reports')
-      .insert({'target_type': targetType, 'target_id': targetId, 'reason': reason.trim()}));
+  Future<void> report(String targetType, String targetId, String reason) => writeOnce.run('report|$targetType|$targetId|$reason',
+      () => _guard(() => _client.from('reports').insert({'target_type': targetType, 'target_id': targetId, 'reason': reason.trim()})));
 
   @override
   Future<List<Report>> openReports() => _guard(() async {
@@ -377,16 +363,16 @@ class SupabaseCommunity implements CommunityApi {
     required String targetId,
     required String reason,
   }) =>
-      _guard(() => _client.rpc('moderate',
-          params: {'p_action': action, 'p_type': targetType, 'p_id': targetId, 'p_reason': reason}));
+      writeOnce.run(
+          'moderate|$action|$targetType|$targetId',
+          () => _guard(
+              () => _client.rpc('moderate', params: {'p_action': action, 'p_type': targetType, 'p_id': targetId, 'p_reason': reason})));
 
   @override
   Future<List<ModerationEntry>> moderationLog() => _guard(() async {
         final rows = await _client.from('moderation_actions').select().order('created_at', ascending: false).limit(100);
         final people = await _people(rows.map((r) => r['actor_id'] as String));
-        return rows
-            .map((r) => ModerationEntry.fromMap({...r, 'actor_name': people[r['actor_id']]?['full_name'] ?? ''}))
-            .toList();
+        return rows.map((r) => ModerationEntry.fromMap({...r, 'actor_name': people[r['actor_id']]?['full_name'] ?? ''})).toList();
       });
 
   // -------------------------------------------------------------- events
@@ -421,59 +407,59 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<CampusEvent> createEvent(CampusEvent e) => _guard(() async {
-        final pubs = await _pubs();
-        final row = await _client
-            .from('events')
-            .insert({
-              'title': e.title.trim(),
-              'description': e.description,
-              'starts_at': e.startsAt.toUtc().toIso8601String(),
-              if (e.endsAt != null) 'ends_at': e.endsAt!.toUtc().toIso8601String(),
-              'location': e.location,
-              'organiser': pubs[e.publisherId]?.name,
-              'publisher_id': e.publisherId,
-              'created_by': _uid,
-              'topic': e.topic,
-              'impact': e.impact,
-              if (e.onlineUrl != null && e.onlineUrl!.isNotEmpty) 'online_url': e.onlineUrl,
-              if (e.coverPath != null && e.coverPath!.isNotEmpty) 'cover_path': e.coverPath,
-              'major_status': e.majorStatus == 'requested' ? 'requested' : 'none',
-              if (e.majorStatus == 'requested') 'major_reason': e.majorReason,
-            })
-            .select('id')
-            .single();
-        final id = row['id'] as String;
-        if (e.speakers.isNotEmpty) {
-          await _client.from('event_speakers').insert([
-            for (var i = 0; i < e.speakers.length; i++)
-              {
-                'event_id': id,
-                'name': e.speakers[i].name,
-                'title': e.speakers[i].title,
-                'role': e.speakers[i].role,
-                'bio': e.speakers[i].bio,
-                'position': i,
-              }
-          ]);
-        }
-        return (await event(id))!;
-      });
+  Future<CampusEvent> createEvent(CampusEvent e) => writeOnce.run(
+      'event|${e.publisherId}|${e.title}|${e.startsAt.toIso8601String()}',
+      () => _guard(() async {
+            final pubs = await _pubs();
+            final row = await _client
+                .from('events')
+                .insert({
+                  'title': e.title.trim(),
+                  'description': e.description,
+                  'starts_at': e.startsAt.toUtc().toIso8601String(),
+                  if (e.endsAt != null) 'ends_at': e.endsAt!.toUtc().toIso8601String(),
+                  'location': e.location,
+                  'organiser': pubs[e.publisherId]?.name,
+                  'publisher_id': e.publisherId,
+                  'created_by': _uid,
+                  'topic': e.topic,
+                  'impact': e.impact,
+                  if (e.onlineUrl != null && e.onlineUrl!.isNotEmpty) 'online_url': e.onlineUrl,
+                  if (e.coverPath != null && e.coverPath!.isNotEmpty) 'cover_path': e.coverPath,
+                  'major_status': e.majorStatus == 'requested' ? 'requested' : 'none',
+                  if (e.majorStatus == 'requested') 'major_reason': e.majorReason,
+                })
+                .select('id')
+                .single();
+            final id = row['id'] as String;
+            if (e.speakers.isNotEmpty) {
+              await _client.from('event_speakers').insert([
+                for (var i = 0; i < e.speakers.length; i++)
+                  {
+                    'event_id': id,
+                    'name': e.speakers[i].name,
+                    'title': e.speakers[i].title,
+                    'role': e.speakers[i].role,
+                    'bio': e.speakers[i].bio,
+                    'position': i,
+                  }
+              ]);
+            }
+            return (await event(id))!;
+          }));
 
   @override
-  Future<void> setMajorStatus(String eventId, String status) => _guard(() => _client.from('events').update({
-        'major_status': status,
-        'major_reviewed_by': _uid,
-        'major_reviewed_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', eventId));
+  Future<void> setMajorStatus(String eventId, String status) => writeOnce.run(
+      'major|$eventId|$status',
+      () => _guard(() => _client.from('events').update({
+            'major_status': status,
+            'major_reviewed_by': _uid,
+            'major_reviewed_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', eventId)));
 
   @override
   Future<List<CampusEvent>> majorRequests() => _guard(() async {
-        final rows = await _client
-            .from('events')
-            .select(_eventSelect)
-            .eq('major_status', 'requested')
-            .order('starts_at');
+        final rows = await _client.from('events').select(_eventSelect).eq('major_status', 'requested').order('starts_at');
         return _eventsFrom(List<Map<String, dynamic>>.from(rows));
       });
 
@@ -534,42 +520,44 @@ class SupabaseCommunity implements CommunityApi {
     required String storedAt,
     String? photoUrl,
   }) =>
-      _guard(() => _client.from('lost_found_items').insert({
-            'publisher_id': publisherId,
-            'title': title.trim(),
-            'description': description.trim(),
-            'found_where': foundWhere.trim(),
-            'stored_at': storedAt.trim(),
-            'photo_path': photoUrl,
-          }));
+      writeOnce.run(
+          'lostFound|$publisherId|$title|$description',
+          () => _guard(() => _client.from('lost_found_items').insert({
+                'publisher_id': publisherId,
+                'title': title.trim(),
+                'description': description.trim(),
+                'found_where': foundWhere.trim(),
+                'stored_at': storedAt.trim(),
+                'photo_path': photoUrl,
+              })));
 
   @override
-  Future<void> setLostFoundStatus(String itemId, String status) =>
-      _guard(() => _client.from('lost_found_items').update({'status': status}).eq('id', itemId));
+  Future<void> setLostFoundStatus(String itemId, String status) => writeOnce.run(
+      'lostFoundStatus|$itemId|$status', () => _guard(() => _client.from('lost_found_items').update({'status': status}).eq('id', itemId)));
 
   @override
-  Future<void> claimItem(String itemId, String proof) =>
-      _guard(() => _client.from('lost_found_claims').insert({'item_id': itemId, 'proof': proof.trim()}));
+  Future<void> claimItem(String itemId, String proof) => writeOnce.run(
+      'claim|$itemId', () => _guard(() => _client.from('lost_found_claims').insert({'item_id': itemId, 'proof': proof.trim()})));
 
   @override
   Future<List<LostFoundClaim>> claimsFor(String itemId) => _guard(() async {
         final rows = await _client.from('lost_found_claims').select().eq('item_id', itemId).order('created_at');
         final people = await _people(rows.map((r) => r['claimant_id'] as String));
-        return rows
-            .map((r) => LostFoundClaim.fromMap({...r, 'claimant_name': people[r['claimant_id']]?['full_name'] ?? ''}))
-            .toList();
+        return rows.map((r) => LostFoundClaim.fromMap({...r, 'claimant_name': people[r['claimant_id']]?['full_name'] ?? ''})).toList();
       });
 
   @override
-  Future<void> decideClaim(String claimId, {required bool approve}) => _guard(() async {
-        final claim = await _client
-            .from('lost_found_claims')
-            .update({'status': approve ? 'approved' : 'rejected', 'handled_by': _uid})
-            .eq('id', claimId)
-            .select('item_id')
-            .single();
-        if (approve) await setLostFoundStatus(claim['item_id'] as String, 'claimed');
-      });
+  Future<void> decideClaim(String claimId, {required bool approve}) => writeOnce.run(
+      'decideClaim|$claimId',
+      () => _guard(() async {
+            final claim = await _client
+                .from('lost_found_claims')
+                .update({'status': approve ? 'approved' : 'rejected', 'handled_by': _uid})
+                .eq('id', claimId)
+                .select('item_id')
+                .single();
+            if (approve) await setLostFoundStatus(claim['item_id'] as String, 'claimed');
+          }));
 
   // ------------------------------------------------------------- surveys
   @override
@@ -578,8 +566,7 @@ class SupabaseCommunity implements CommunityApi {
         final rows = await _client
             .from('surveys')
             .select('*, survey_questions(*)')
-            .inFilter('status', ['open', 'closed'])
-            .order('closes_at', ascending: false);
+            .inFilter('status', ['open', 'closed']).order('closes_at', ascending: false);
         final done = await _client.from('survey_participation').select('survey_id').eq('user_id', _uid);
         final taken = done.map((r) => r['survey_id'] as String).toSet();
         final me = _me();
@@ -605,45 +592,46 @@ class SupabaseCommunity implements CommunityApi {
     required DateTime closesAt,
     required List<SurveyQuestion> questions,
   }) =>
-      _guard(() async {
-        if (questions.isEmpty) throw CommunityException('Add at least one question');
-        // Created as a draft, questions added, then opened (the database only
-        // accepts questions on drafts so nobody can change a live survey).
-        final row = await _client
-            .from('surveys')
-            .insert({
-              'publisher_id': publisherId,
-              'title': title.trim(),
-              'purpose': purpose.trim(),
-              'closes_at': closesAt.toUtc().toIso8601String(),
-              'status': 'draft',
-            })
-            .select('id')
-            .single();
-        final id = row['id'] as String;
-        for (var i = 0; i < questions.length; i++) {
-          await _client.from('survey_questions').insert({
-            'survey_id': id,
-            'position': i + 1,
-            'prompt': questions[i].prompt,
-            'kind': questions[i].kind,
-            'options': questions[i].options,
-          });
-        }
-        await _client.from('surveys').update({'status': 'open'}).eq('id', id);
-        return (await surveys()).firstWhere((s) => s.id == id);
-      });
+      writeOnce.run(
+          'survey|$publisherId|$title',
+          () => _guard(() async {
+                if (questions.isEmpty) throw CommunityException('Add at least one question');
+                // Created as a draft, questions added, then opened (the database only
+                // accepts questions on drafts so nobody can change a live survey).
+                final row = await _client
+                    .from('surveys')
+                    .insert({
+                      'publisher_id': publisherId,
+                      'title': title.trim(),
+                      'purpose': purpose.trim(),
+                      'closes_at': closesAt.toUtc().toIso8601String(),
+                      'status': 'draft',
+                    })
+                    .select('id')
+                    .single();
+                final id = row['id'] as String;
+                for (var i = 0; i < questions.length; i++) {
+                  await _client.from('survey_questions').insert({
+                    'survey_id': id,
+                    'position': i + 1,
+                    'prompt': questions[i].prompt,
+                    'kind': questions[i].kind,
+                    'options': questions[i].options,
+                  });
+                }
+                await _client.from('surveys').update({'status': 'open'}).eq('id', id);
+                return (await surveys()).firstWhere((s) => s.id == id);
+              }));
 
   @override
-  Future<void> submitSurvey(String surveyId, Map<String, dynamic> answers) =>
-      _guard(() => _client.rpc('submit_survey', params: {'p_survey': surveyId, 'p_answers': answers}));
+  Future<void> submitSurvey(String surveyId, Map<String, dynamic> answers) => writeOnce.run(
+      'surveyAnswer|$surveyId', () => _guard(() => _client.rpc('submit_survey', params: {'p_survey': surveyId, 'p_answers': answers})));
 
   @override
   Future<List<SurveyResultRow>> surveyResults(String surveyId) => _guard(() async {
         final rows = await _client.rpc('survey_results', params: {'p_survey': surveyId}) as List;
         return rows
-            .map((r) => SurveyResultRow(
-                questionId: r['question_id'] as String, answer: r['answer'] as String, n: (r['n'] as num).toInt()))
+            .map((r) => SurveyResultRow(questionId: r['question_id'] as String, answer: r['answer'] as String, n: (r['n'] as num).toInt()))
             .toList();
       });
 
@@ -749,15 +737,18 @@ class SupabaseCommunity implements CommunityApi {
           ], onConflict: 'tutor_id,course_code');
         }
         final existing = await _client.from('tutor_modules').select('id, course_code').eq('tutor_id', _uid);
-        final drop = [for (final r in existing) if (!codes.contains(r['course_code'] as String)) r['id'] as String];
+        final drop = [
+          for (final r in existing)
+            if (!codes.contains(r['course_code'] as String)) r['id'] as String
+        ];
         if (drop.isNotEmpty) await _client.from('tutor_modules').delete().inFilter('id', drop);
       });
 
   @override
-  Future<void> requestTutor({required String tutorId, required String courseCode, required String message}) =>
-      _guard(() => _client
-          .from('tutor_requests')
-          .insert({'tutor_id': tutorId, 'course_code': courseCode, 'message': message.trim()}));
+  Future<void> requestTutor({required String tutorId, required String courseCode, required String message}) => writeOnce.run(
+      'tutorRequest|$tutorId|$courseCode|$message',
+      () =>
+          _guard(() => _client.from('tutor_requests').insert({'tutor_id': tutorId, 'course_code': courseCode, 'message': message.trim()})));
 
   @override
   Future<List<TutorRequest>> myTutorRequests() => _guard(() async {
@@ -766,9 +757,8 @@ class SupabaseCommunity implements CommunityApi {
           ...rows.map((r) => r['student_id'] as String),
           ...rows.map((r) => r['tutor_id'] as String),
         ]);
-        final reviewed = (await _client.from('tutor_reviews').select('request_id').eq('student_id', _uid))
-            .map((r) => r['request_id'] as String)
-            .toSet();
+        final reviewed =
+            (await _client.from('tutor_reviews').select('request_id').eq('student_id', _uid)).map((r) => r['request_id'] as String).toSet();
         return rows
             .map((r) => TutorRequest.fromMap({
                   ...r,
@@ -780,24 +770,26 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> answerTutorRequest(String id, {required bool accept}) => _guard(
-      () => _client.from('tutor_requests').update({'status': accept ? 'accepted' : 'declined'}).eq('id', id));
+  Future<void> answerTutorRequest(String id, {required bool accept}) => writeOnce.run('tutorAnswer|$id',
+      () => _guard(() => _client.from('tutor_requests').update({'status': accept ? 'accepted' : 'declined'}).eq('id', id)));
 
   @override
   Future<void> confirmLesson(String id) =>
-      _guard(() => _client.from('tutor_requests').update({'status': 'completed'}).eq('id', id));
+      writeOnce.run('confirmLesson|$id', () => _guard(() => _client.from('tutor_requests').update({'status': 'completed'}).eq('id', id)));
 
   @override
-  Future<void> reviewTutor({required String requestId, required int rating, String? comment}) => _guard(() async {
-        final r = await _client.from('tutor_requests').select('tutor_id, course_code').eq('id', requestId).single();
-        await _client.from('tutor_reviews').insert({
-          'request_id': requestId,
-          'tutor_id': r['tutor_id'],
-          'course_code': r['course_code'],
-          'rating': rating,
-          if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
-        });
-      });
+  Future<void> reviewTutor({required String requestId, required int rating, String? comment}) => writeOnce.run(
+      'tutorReview|$requestId',
+      () => _guard(() async {
+            final r = await _client.from('tutor_requests').select('tutor_id, course_code').eq('id', requestId).single();
+            await _client.from('tutor_reviews').insert({
+              'request_id': requestId,
+              'tutor_id': r['tutor_id'],
+              'course_code': r['course_code'],
+              'rating': rating,
+              if (comment != null && comment.trim().isNotEmpty) 'comment': comment.trim(),
+            });
+          }));
 
   // ------------------------------------------------------------- pictures
   @override
@@ -807,12 +799,10 @@ class SupabaseCommunity implements CommunityApi {
         final mime = ext == 'png' ? 'image/png' : (ext == 'webp' ? 'image/webp' : 'image/jpeg');
         final path = '$_uid/${_uuid.v4()}.${ext == 'jpg' ? 'jpeg' : ext}';
         try {
-          await _client.storage.from('campus-media').uploadBinary(path, bytes,
-              fileOptions: FileOptions(contentType: mime, upsert: false));
+          await _client.storage.from('campus-media').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime, upsert: false));
         } on StorageException catch (e) {
-          throw CommunityException(e.message.contains('security') || e.statusCode == '403'
-              ? 'Only office holders can upload pictures.'
-              : e.message);
+          throw CommunityException(
+              e.message.contains('security') || e.statusCode == '403' ? 'Only office holders can upload pictures.' : e.message);
         }
         return _client.storage.from('campus-media').getPublicUrl(path);
       });
@@ -831,9 +821,8 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> accept(String policy, String version) => _guard(() => _client
-      .from('policy_acceptances')
-      .upsert({'user_id': _uid, 'policy': policy, 'version': version}));
+  Future<void> accept(String policy, String version) =>
+      _guard(() => _client.from('policy_acceptances').upsert({'user_id': _uid, 'policy': policy, 'version': version}));
 
   // ------------------------------------------------------------- post views
   @override
@@ -854,25 +843,27 @@ class SupabaseCommunity implements CommunityApi {
   Future<String> uploadAvatar(Uint8List bytes) => _guard(() async {
         if (bytes.length > 300 * 1024) throw CommunityException('Profile photos must be under 300 KB');
         final path = '$_uid/${_uuid.v4()}.jpeg';
-        await _client.storage.from('avatars').uploadBinary(path, bytes,
-            fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false));
+        await _client.storage
+            .from('avatars')
+            .uploadBinary(path, bytes, fileOptions: const FileOptions(contentType: 'image/jpeg', upsert: false));
         return _client.storage.from('avatars').getPublicUrl(path);
       });
 
   // ------------------------------------------------------------- tutor trust
   @override
-  Future<void> reportTutor({required String tutorId, required String reason, required String details}) =>
-      _guard(() async {
-        try {
-          await _client.from('tutor_reports').insert({'tutor_id': tutorId, 'reason': reason, 'details': details.trim()});
-        } on PostgrestException catch (e) {
-          if (e.code == '42501') {
-            throw CommunityException('You can only report a tutor you have had a lesson with.');
-          }
-          if (e.code == '23505') throw CommunityException('You already have an open report about this tutor.');
-          rethrow;
-        }
-      });
+  Future<void> reportTutor({required String tutorId, required String reason, required String details}) => writeOnce.run(
+      'tutorReport|$tutorId|$reason',
+      () => _guard(() async {
+            try {
+              await _client.from('tutor_reports').insert({'tutor_id': tutorId, 'reason': reason, 'details': details.trim()});
+            } on PostgrestException catch (e) {
+              if (e.code == '42501') {
+                throw CommunityException('You can only report a tutor you have had a lesson with.');
+              }
+              if (e.code == '23505') throw CommunityException('You already have an open report about this tutor.');
+              rethrow;
+            }
+          }));
 
   @override
   Future<List<TutorReportRow>> tutorReportSummary() => _guard(() async {
@@ -881,15 +872,17 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> closeTutorReports(String tutorId, {required bool upheld}) => _guard(() => _client
-      .from('tutor_reports')
-      .update({
-        'status': upheld ? 'upheld' : 'dismissed',
-        'handled_by': _uid,
-        'handled_at': DateTime.now().toUtc().toIso8601String(),
-      })
-      .eq('tutor_id', tutorId)
-      .eq('status', 'open'));
+  Future<void> closeTutorReports(String tutorId, {required bool upheld}) => writeOnce.run(
+      'closeTutorReports|$tutorId',
+      () => _guard(() => _client
+          .from('tutor_reports')
+          .update({
+            'status': upheld ? 'upheld' : 'dismissed',
+            'handled_by': _uid,
+            'handled_at': DateTime.now().toUtc().toIso8601String(),
+          })
+          .eq('tutor_id', tutorId)
+          .eq('status', 'open')));
 
   // ------------------------------------------------------------- course units
   @override
@@ -902,9 +895,7 @@ class SupabaseCommunity implements CommunityApi {
   Future<List<CourseNotice>> courseNotices() => _guard(() async {
         final rows = await _client.from('course_notices').select().order('created_at', ascending: false).limit(100);
         final ids = rows.map((r) => r['lecturer_id'] as String).toSet().toList();
-        final names = ids.isEmpty
-            ? <dynamic>[]
-            : await _client.from('public_profiles').select('id, full_name').inFilter('id', ids);
+        final names = ids.isEmpty ? <dynamic>[] : await _client.from('public_profiles').select('id, full_name').inFilter('id', ids);
         final byId = {for (final n in names) n['id'] as String: n['full_name'] as String? ?? ''};
         return rows.map((r) => CourseNotice.fromMap({...r, 'lecturer_name': byId[r['lecturer_id']] ?? ''})).toList();
       });
@@ -917,59 +908,51 @@ class SupabaseCommunity implements CommunityApi {
     String? linkUrl,
     String priority = 'normal',
   }) =>
-      _guard(() async {
-        try {
-          await _client.from('course_notices').insert({
-            'course_codes': courseCodes,
-            'title': title.trim(),
-            'body': body.trim(),
-            'link_url': (linkUrl ?? '').trim().isEmpty ? null : linkUrl!.trim(),
-            'priority': priority,
-          });
-        } on PostgrestException catch (e) {
-          if (e.code == '42501') {
-            throw CommunityException('You can only send notices to units you are assigned to teach.');
-          }
-          rethrow;
-        }
-      });
+      writeOnce.run(
+          'courseNotice|${courseCodes.join(',')}|$title|$body',
+          () => _guard(() async {
+                try {
+                  await _client.from('course_notices').insert({
+                    'course_codes': courseCodes,
+                    'title': title.trim(),
+                    'body': body.trim(),
+                    'link_url': (linkUrl ?? '').trim().isEmpty ? null : linkUrl!.trim(),
+                    'priority': priority,
+                  });
+                } on PostgrestException catch (e) {
+                  if (e.code == '42501') {
+                    throw CommunityException('You can only send notices to units you are assigned to teach.');
+                  }
+                  rethrow;
+                }
+              }));
 
   @override
   Future<List<CourseLecturer>> courseLecturers() => _guard(() async {
         final rows = await _client.from('course_lecturers').select().order('course_code');
         final ids = rows.map((r) => r['lecturer_id'] as String).toSet().toList();
-        final names = ids.isEmpty
-            ? <dynamic>[]
-            : await _client.from('public_profiles').select('id, full_name').inFilter('id', ids);
+        final names = ids.isEmpty ? <dynamic>[] : await _client.from('public_profiles').select('id, full_name').inFilter('id', ids);
         final byId = {for (final n in names) n['id'] as String: n['full_name'] as String? ?? ''};
         return rows
-            .map((r) => CourseLecturer(
-                courseCode: r['course_code'], lecturerId: r['lecturer_id'], name: byId[r['lecturer_id']] ?? ''))
+            .map((r) => CourseLecturer(courseCode: r['course_code'], lecturerId: r['lecturer_id'], name: byId[r['lecturer_id']] ?? ''))
             .toList();
       });
 
   @override
-  Future<void> assignLecturer({required String userId, required String courseCode}) => _guard(() => _client
-      .from('course_lecturers')
-      .upsert({'course_code': courseCode.toUpperCase().replaceAll(RegExp(r'\s+'), ''), 'lecturer_id': userId},
-          ignoreDuplicates: true));
+  Future<void> assignLecturer({required String userId, required String courseCode}) => writeOnce.run(
+      'assignLecturer|$userId|$courseCode',
+      () => _guard(() => _client.from('course_lecturers').upsert(
+          {'course_code': courseCode.toUpperCase().replaceAll(RegExp(r'\s+'), ''), 'lecturer_id': userId},
+          ignoreDuplicates: true)));
 
   @override
-  Future<void> removeLecturer({required String courseCode, required String lecturerId}) => _guard(() => _client
-      .from('course_lecturers')
-      .delete()
-      .eq('course_code', courseCode)
-      .eq('lecturer_id', lecturerId));
+  Future<void> removeLecturer({required String courseCode, required String lecturerId}) =>
+      _guard(() => _client.from('course_lecturers').delete().eq('course_code', courseCode).eq('lecturer_id', lecturerId));
 
   // ------------------------------------------------------------- notifications
   @override
   Future<List<AppNotification>> notifications() => _guard(() async {
-        final rows = await _client
-            .from('notifications')
-            .select()
-            .eq('user_id', _uid)
-            .order('created_at', ascending: false)
-            .limit(60);
+        final rows = await _client.from('notifications').select().eq('user_id', _uid).order('created_at', ascending: false).limit(60);
         return rows.map(AppNotification.fromMap).toList();
       });
 
@@ -1009,11 +992,13 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> closeReport(String reportId, {required bool actioned}) => _guard(() => _client.from('reports').update({
-        'status': actioned ? 'actioned' : 'dismissed',
-        'handled_by': _uid,
-        'handled_at': DateTime.now().toUtc().toIso8601String(),
-      }).eq('id', reportId));
+  Future<void> closeReport(String reportId, {required bool actioned}) => writeOnce.run(
+      'closeReport|$reportId',
+      () => _guard(() => _client.from('reports').update({
+            'status': actioned ? 'actioned' : 'dismissed',
+            'handled_by': _uid,
+            'handled_at': DateTime.now().toUtc().toIso8601String(),
+          }).eq('id', reportId)));
 
   // ------------------------------------------------------------ dashboard
   @override
@@ -1037,14 +1022,17 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<Rsvp> rsvp(String eventId) => _guard(() async {
-        final r = await _client.from('event_rsvps').insert({'event_id': eventId}).select().single();
-        return Rsvp.fromMap(r);
-      });
+  Future<Rsvp> rsvp(String eventId) => writeOnce.run(
+      'rsvp|$eventId',
+      () => _guard(() async {
+            final r = await _client.from('event_rsvps').insert({'event_id': eventId}).select().single();
+            return Rsvp.fromMap(r);
+          }));
 
   @override
-  Future<void> cancelRsvp(String eventId) =>
-      _guard(() => _client.from('event_rsvps').delete().eq('event_id', eventId).eq('user_id', _uid));
+  Future<void> cancelRsvp(String eventId) => writeOnce.run(
+      'cancelRsvp|$eventId', () => _guard(() => _client.from('event_rsvps').delete().eq('event_id', eventId).eq('user_id', _uid)),
+      toggle: true);
 
   @override
   Future<Map<String, (int, int)>> rsvpCounts(List<String> eventIds) => _guard(() async {
@@ -1056,8 +1044,8 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<String> checkIn(String eventId, String code) =>
-      _guard(() async => '${await _client.rpc('event_check_in', params: {'p_event': eventId, 'p_code': code})}');
+  Future<String> checkIn(String eventId, String code) => writeOnce.run('checkIn|$eventId|${code.toUpperCase()}',
+      () => _guard(() async => '${await _client.rpc('event_check_in', params: {'p_event': eventId, 'p_code': code})}'));
 
   // ------------------------------------------------------------ polls
   @override
@@ -1067,8 +1055,8 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> answerQuestion(String questionId, int option) =>
-      _guard(() => _client.rpc('answer_post_question', params: {'p_question': questionId, 'p_option': option}));
+  Future<void> answerQuestion(String questionId, int option) => writeOnce.run('answer|$questionId',
+      () => _guard(() => _client.rpc('answer_post_question', params: {'p_question': questionId, 'p_option': option})));
 
   // ---------------------------------------------------------- grade checks
   @override
@@ -1078,75 +1066,74 @@ class SupabaseCommunity implements CommunityApi {
       });
 
   @override
-  Future<void> sendGradeProof(
-          {required String courseCode, required String grade, required Uint8List bytes, required String extension}) =>
-      _guard(() async {
-        if (bytes.length > 5 * 1024 * 1024) throw CommunityException('The file must be under 5 MB.');
-        final ext = extension.toLowerCase().replaceAll('.', '');
-        final mime = switch (ext) {
-          'pdf' => 'application/pdf',
-          'png' => 'image/png',
-          'webp' => 'image/webp',
-          'jpg' || 'jpeg' => 'image/jpeg',
-          _ => throw CommunityException('Send a photo (JPG/PNG) or a PDF of your results.'),
-        };
-        final code = normCode(courseCode);
-        final path = '$_uid/$code/${_uuid.v4()}.${ext == 'jpg' ? 'jpeg' : ext}';
-        await _client.storage.from('grade-proofs').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime));
-        try {
-          await _client.from('tutor_grade_proofs').insert({'course_code': code, 'grade_claimed': grade.trim(), 'file_path': path});
-        } catch (e) {
-          // Don't leave a private file lying around if the record failed.
-          await _client.storage.from('grade-proofs').remove([path]).catchError((_) => <FileObject>[]);
-          if (e is PostgrestException && e.code == '23505') {
-            throw CommunityException('You already sent a slip for $code. Wait for it to be checked.');
-          }
-          rethrow;
-        }
-      });
+  Future<void> sendGradeProof({required String courseCode, required String grade, required Uint8List bytes, required String extension}) =>
+      writeOnce.run(
+          'gradeProof|${normCode(courseCode)}|${bytes.length}',
+          () => _guard(() async {
+                if (bytes.length > 5 * 1024 * 1024) throw CommunityException('The file must be under 5 MB.');
+                final ext = extension.toLowerCase().replaceAll('.', '');
+                final mime = switch (ext) {
+                  'pdf' => 'application/pdf',
+                  'png' => 'image/png',
+                  'webp' => 'image/webp',
+                  'jpg' || 'jpeg' => 'image/jpeg',
+                  _ => throw CommunityException('Send a photo (JPG/PNG) or a PDF of your results.'),
+                };
+                final code = normCode(courseCode);
+                final path = '$_uid/$code/${_uuid.v4()}.${ext == 'jpg' ? 'jpeg' : ext}';
+                await _client.storage.from('grade-proofs').uploadBinary(path, bytes, fileOptions: FileOptions(contentType: mime));
+                try {
+                  await _client.from('tutor_grade_proofs').insert({'course_code': code, 'grade_claimed': grade.trim(), 'file_path': path});
+                } catch (e) {
+                  // Don't leave a private file lying around if the record failed.
+                  await _client.storage.from('grade-proofs').remove([path]).catchError((_) => <FileObject>[]);
+                  if (e is PostgrestException && e.code == '23505') {
+                    throw CommunityException('You already sent a slip for $code. Wait for it to be checked.');
+                  }
+                  rethrow;
+                }
+              }));
 
   @override
   Future<List<GradeProof>> gradeProofQueue() => _guard(() async {
-        final rows = await _client
-            .from('tutor_grade_proofs')
-            .select()
-            .eq('status', 'pending')
-            .neq('tutor_id', _uid)
-            .order('created_at');
+        final rows = await _client.from('tutor_grade_proofs').select().eq('status', 'pending').neq('tutor_id', _uid).order('created_at');
         final people = await _people([for (final r in rows) r['tutor_id'] as String]);
         return [for (final r in rows) GradeProof.fromMap(r, name: people[r['tutor_id']]?['full_name'] ?? '')];
       });
 
   @override
-  Future<String> gradeProofLink(String filePath) =>
-      _guard(() => _client.storage.from('grade-proofs').createSignedUrl(filePath, 600));
+  Future<String> gradeProofLink(String filePath) => _guard(() => _client.storage.from('grade-proofs').createSignedUrl(filePath, 600));
 
   @override
-  Future<void> reviewGradeProof(String proofId, {required bool approve, String? reason}) => _guard(() async {
-        final path = await _client.rpc('review_grade_proof',
-            params: {'p_proof': proofId, 'p_approve': approve, 'p_reason': reason}) as String?;
-        // We don't keep results slips after the decision.
-        if (path != null) {
-          await _client.storage.from('grade-proofs').remove([path]).catchError((_) => <FileObject>[]);
-        }
-      });
-
-  @override
-  Future<void> addPostQuestions(String postId, List<PostQuestion> questions) => _guard(() async {
-        if (questions.isEmpty) return;
-        if (questions.length > 5) throw CommunityException('At most 5 questions per post');
-        final bad = questions.map((q) => q.problem).whereType<String>().firstOrNull;
-        if (bad != null) throw CommunityException(bad);
-        await _client.from('post_questions').insert([
-          for (var i = 0; i < questions.length; i++)
-            {
-              'post_id': postId,
-              'position': i,
-              'kind': questions[i].kind,
-              'prompt': questions[i].prompt.trim(),
-              'options': questions[i].options.map((o) => o.trim()).toList(),
-              'correct_index': questions[i].isQuiz ? questions[i].correctIndex : null,
+  Future<void> reviewGradeProof(String proofId, {required bool approve, String? reason}) => writeOnce.run(
+      'reviewGradeProof|$proofId',
+      () => _guard(() async {
+            final path =
+                await _client.rpc('review_grade_proof', params: {'p_proof': proofId, 'p_approve': approve, 'p_reason': reason}) as String?;
+            // We don't keep results slips after the decision.
+            if (path != null) {
+              await _client.storage.from('grade-proofs').remove([path]).catchError((_) => <FileObject>[]);
             }
-        ]);
-      });
+          }));
+
+  @override
+  Future<void> addPostQuestions(String postId, List<PostQuestion> questions) => writeOnce.run(
+      'postQuestions|$postId',
+      () => _guard(() async {
+            if (questions.isEmpty) return;
+            if (questions.length > 5) throw CommunityException('At most 5 questions per post');
+            final bad = questions.map((q) => q.problem).whereType<String>().firstOrNull;
+            if (bad != null) throw CommunityException(bad);
+            await _client.from('post_questions').insert([
+              for (var i = 0; i < questions.length; i++)
+                {
+                  'post_id': postId,
+                  'position': i,
+                  'kind': questions[i].kind,
+                  'prompt': questions[i].prompt.trim(),
+                  'options': questions[i].options.map((o) => o.trim()).toList(),
+                  'correct_index': questions[i].isQuiz ? questions[i].correctIndex : null,
+                }
+            ]);
+          }));
 }

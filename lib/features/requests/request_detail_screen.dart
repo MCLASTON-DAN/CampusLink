@@ -25,23 +25,36 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
     super.dispose();
   }
 
+  bool _sending = false;
+
   Future<void> _send({RequestStatus? status}) async {
+    if (_sending) return; // one send at a time
     final text = _msg.text.trim();
     if (text.isEmpty && status == null) return;
-    await ref.read(repositoryProvider).addRequestUpdate(
-          RequestUpdate(
-            id: const Uuid().v4(),
-            requestId: widget.requestId,
-            authorId: ref.read(repositoryProvider).currentUserSync?.id,
-            message: text.isEmpty ? 'Status changed to ${status!.label}.' : text,
-            newStatus: status?.db,
-            createdAt: DateTime.now(),
-          ),
-          newStatus: status,
-        );
-    _msg.clear();
-    ref.invalidate(requestUpdatesProvider(widget.requestId));
-    ref.invalidate(myRequestsProvider);
+    setState(() => _sending = true);
+    _msg.clear(); // clear at once so it doesn't look like nothing happened
+    try {
+      await ref.read(repositoryProvider).addRequestUpdate(
+            RequestUpdate(
+              id: const Uuid().v4(),
+              requestId: widget.requestId,
+              authorId: ref.read(repositoryProvider).currentUserSync?.id,
+              message: text.isEmpty ? 'Status changed to ${status!.label}.' : text,
+              newStatus: status?.db,
+              createdAt: DateTime.now(),
+            ),
+            newStatus: status,
+          );
+      ref.invalidate(requestUpdatesProvider(widget.requestId));
+      ref.invalidate(myRequestsProvider);
+    } catch (_) {
+      if (mounted) {
+        if (_msg.text.isEmpty) _msg.text = text; // give the words back
+        showSnack(context, 'Not sent. Check your connection and try again.');
+      }
+    } finally {
+      if (mounted) setState(() => _sending = false);
+    }
   }
 
   Future<void> _move(HelpRequest r, List<HelpOffice> offices) async {
@@ -175,7 +188,7 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                                 ActionChip(
                                   label: Text('Mark ${s.label}'),
                                   avatar: Icon(Icons.flag_rounded, size: 16, color: statusColor(s)),
-                                  onPressed: () => _send(status: s),
+                                  onPressed: _sending ? null : () => _send(status: s),
                                 ),
                             ],
                           ),
@@ -189,11 +202,16 @@ class _RequestDetailScreenState extends ConsumerState<RequestDetailScreen> {
                               ),
                             ),
                             const SizedBox(width: 8),
-                            IconButton.filled(onPressed: () => _send(), icon: const Icon(Icons.send_rounded)),
+                            IconButton.filled(
+                              onPressed: _sending ? null : () => _send(),
+                              icon: _sending
+                                  ? const SizedBox(width: 18, height: 18, child: CircularProgressIndicator(strokeWidth: 2))
+                                  : const Icon(Icons.send_rounded),
+                            ),
                             if (canClose && user?.isStaff != true)
                               IconButton.outlined(
-                                tooltip: 'Mark as resolved',
-                                onPressed: () => _send(status: RequestStatus.resolved),
+                                tooltip: 'Close it: my problem is sorted',
+                                onPressed: _sending ? null : () => _send(status: RequestStatus.closed),
                                 icon: const Icon(Icons.check_rounded),
                               ),
                           ],
