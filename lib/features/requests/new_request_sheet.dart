@@ -13,7 +13,10 @@ Future<void> showNewRequestSheet(BuildContext context, WidgetRef ref, {String? o
   final title = TextEditingController();
   final desc = TextEditingController();
   String? office = officeId;
+  String? topic; // one of the office's topics, or 'Other'
+  final refNo = TextEditingController(); // unit code or reference, optional
   var priority = 'normal';
+  List<String> topicsOf(String? id) => offices.where((o) => o.id == id).firstOrNull?.topics ?? const [];
   // One id for this form. Tapping twice, or retrying after a network error,
   // sends the same id, so it can only ever make one complaint.
   final requestId = const Uuid().v4();
@@ -55,12 +58,42 @@ Future<void> showNewRequestSheet(BuildContext context, WidgetRef ref, {String? o
                   const DropdownMenuItem(value: '', child: Text('Not sure – general desk will route it')),
                   for (final o in offices) DropdownMenuItem(value: o.id, child: Text(o.name, overflow: TextOverflow.ellipsis)),
                 ],
-                onChanged: busy ? null : (v) => setS(() => office = (v == null || v.isEmpty) ? null : v),
+                onChanged: busy
+                    ? null
+                    : (v) => setS(() {
+                          office = (v == null || v.isEmpty) ? null : v;
+                          topic = null; // topics belong to an office
+                        }),
               ),
+            if (topicsOf(office).isNotEmpty) ...[
+              const SizedBox(height: 12),
+              DropdownButtonFormField<String>(
+                key: ValueKey('topic-$office'),
+                initialValue: topic,
+                isExpanded: true,
+                decoration: const InputDecoration(labelText: 'What is it about?'),
+                items: [
+                  for (final t in topicsOf(office)) DropdownMenuItem(value: t, child: Text(t)),
+                  const DropdownMenuItem(value: 'Other', child: Text('Something else')),
+                ],
+                onChanged: busy ? null : (v) => setS(() => topic = v),
+              ),
+            ],
             const SizedBox(height: 12),
-            TextField(controller: title, decoration: const InputDecoration(labelText: 'Short title', hintText: 'e.g. Missing marks for BDA2207')),
+            if (topic != null && topic != 'Other')
+              TextField(
+                controller: refNo,
+                decoration: const InputDecoration(labelText: 'Unit code or reference (optional)', hintText: 'e.g. BDA2207'),
+              )
+            else
+              TextField(controller: title, decoration: const InputDecoration(labelText: 'Short title', hintText: 'e.g. Missing marks for BDA2207')),
             const SizedBox(height: 12),
-            TextField(controller: desc, maxLines: 4, decoration: const InputDecoration(labelText: 'Details')),
+            TextField(
+              controller: desc,
+              maxLines: 4,
+              maxLength: 400,
+              decoration: const InputDecoration(labelText: 'Details', hintText: 'Only what the office needs to know. Short and clear.'),
+            ),
             const SizedBox(height: 12),
             SegmentedButton<String>(
               segments: const [
@@ -81,7 +114,15 @@ Future<void> showNewRequestSheet(BuildContext context, WidgetRef ref, {String? o
               onPressed: busy
                   ? null
                   : () async {
-                      if (title.text.trim().length < 3) {
+                      if (topicsOf(office).isNotEmpty && topic == null) {
+                        setS(() => error = 'Pick what it is about.');
+                        return;
+                      }
+                      final useTopic = topic != null && topic != 'Other';
+                      final finalTitle = useTopic
+                          ? (refNo.text.trim().isEmpty ? topic! : '$topic – ${refNo.text.trim()}')
+                          : title.text.trim();
+                      if (finalTitle.length < 3) {
                         setS(() => error = 'Give it a short title (3+ letters).');
                         return;
                       }
@@ -94,9 +135,10 @@ Future<void> showNewRequestSheet(BuildContext context, WidgetRef ref, {String? o
                         id: requestId,
                         studentId: uid,
                         officeId: office,
-                        title: title.text.trim(),
+                        title: finalTitle,
                         description: desc.text.trim(),
                         priority: priority,
+                        topic: topic,
                         createdAt: DateTime.now(),
                         updatedAt: DateTime.now(),
                       );

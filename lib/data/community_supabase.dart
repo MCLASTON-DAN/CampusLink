@@ -485,6 +485,7 @@ class SupabaseCommunity implements CommunityApi {
         'description': o.description,
         'location': o.location,
         'open_hours': o.openHours,
+        if (o.topics.isNotEmpty) 'topics': o.topics,
         'what_we_do': o.whatWeDo,
         'what_we_dont': o.whatWeDont,
         'bring': o.bring,

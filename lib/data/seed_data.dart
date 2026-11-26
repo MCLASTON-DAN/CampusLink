@@ -7,6 +7,7 @@ class SeedData {
   static final offices = <HelpOffice>[
     const HelpOffice(
       id: 'off-registrar',
+      topics: ['Registration', 'Add or drop a unit', 'Transcript', 'Student ID card', 'Admission letter', 'Deferment'],
       name: "Registrar's Office",
       description: 'Registration, course add/drop, transcripts, ID cards, admission letters.',
       category: 'admin',
@@ -18,6 +19,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-finance',
+      topics: ['Fee statement', 'Payment not showing', 'Payment plan', 'Bursary or scholarship', 'Refund'],
       name: 'Finance Office',
       description: 'Tuition payments, fee statements, payment plans, bursaries.',
       category: 'finance',
@@ -29,6 +31,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-ict',
+      topics: ['Portal login', 'Student email', 'Wi-Fi', 'E-learning', 'Lab computer'],
       name: 'ICT Help Desk',
       description: 'Student portal login, email, Wi‑Fi, e-learning platform issues.',
       category: 'it',
@@ -40,6 +43,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-library',
+      topics: ['Borrowing', 'E-resources login', 'Fines', 'Printing', 'Study room'],
       name: 'Library',
       description: 'Borrowing, e-resources, study spaces, printing.',
       category: 'library',
@@ -51,6 +55,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-dos',
+      topics: ['Accommodation', 'Welfare', 'Clubs and societies', 'Discipline', 'Complaint about a service'],
       name: 'Dean of Students',
       description: 'Welfare, accommodation, discipline, clubs and societies.',
       category: 'welfare',
@@ -62,6 +67,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-wellness',
+      topics: ['Talk to a counsellor', 'Stress or exams', 'Personal matter'],
       name: 'Counselling & Wellness',
       confidential: true,
       description: 'Confidential counselling, mental health support, peer support.',
@@ -74,6 +80,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-fst',
+      topics: ['Timetable clash', 'Course advising', 'Missing marks', 'Lecturer not attending', 'Exam query'],
       name: 'Faculty of Science & Technology Office',
       description: 'Course advising, timetables, exam queries for FST programmes.',
       category: 'academic',
@@ -85,6 +92,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-exams',
+      topics: ['Exam card', 'Missing marks', 'Remark request', 'Retake', 'Results not showing'],
       name: 'Examinations Office',
       description: 'Exam cards, results, remarking, missing marks.',
       category: 'academic',
@@ -96,6 +104,7 @@ class SeedData {
     ),
     const HelpOffice(
       id: 'off-careers',
+      topics: ['CV review', 'Internship placement', 'Recommendation letter'],
       name: 'Careers & Internships',
       description: 'CV reviews, internship placement, job board.',
       category: 'academic',

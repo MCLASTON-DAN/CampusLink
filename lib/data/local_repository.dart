@@ -193,6 +193,24 @@ class LocalRepository implements CampusRepository {
       officeId != null && (community.mergeOffices(SeedData.offices).where((o) => o.id == officeId).firstOrNull?.confidential ?? false);
 
   @override
+  Future<int> replyToTopic({required String? officeId, required String topic, required String message, RequestStatus? status}) async {
+    if (!canHandleRequest(me: _user, officeId: officeId, myOffices: _handled(), confidential: _confidential(officeId))) {
+      throw Exception('You do not handle this office.');
+    }
+    var n = 0;
+    for (var i = 0; i < _requests.length; i++) {
+      final r = _requests[i];
+      if (r.officeId != officeId || r.topic != topic) continue;
+      if (r.status != RequestStatus.open && r.status != RequestStatus.inProgress) continue;
+      _requests[i] = r.copyWith(status: status ?? r.status, updatedAt: DateTime.now());
+      _updates.add(RequestUpdate(
+          id: _uuid.v4(), requestId: r.id, authorId: _user?.id, message: message.trim(), newStatus: status?.db, createdAt: DateTime.now()));
+      n++;
+    }
+    return n;
+  }
+
+  @override
   Future<Set<String>> myHandledOffices() => _tick(_handled());
 
   @override

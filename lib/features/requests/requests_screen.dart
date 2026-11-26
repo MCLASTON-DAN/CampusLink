@@ -59,6 +59,10 @@ class RequestsScreen extends ConsumerWidget {
                   ],
                 ),
                 const SizedBox(height: 16),
+                TopicGroups(
+                  requests: list.where((r) => r.studentId != user?.id).toList(),
+                  offices: offices,
+                ),
                 for (final (i, r) in [
                   ...list.where((r) => r.studentId == user?.id),
                   ...list.where((r) => r.studentId != user?.id),
@@ -124,6 +128,91 @@ class _Stat extends StatelessWidget {
             Text(label, style: Theme.of(context).textTheme.bodySmall),
           ],
         ),
+      ),
+    );
+  }
+}
+
+
+/// Office view: open requests grouped by topic, answer a whole group at once.
+class TopicGroups extends ConsumerWidget {
+  const TopicGroups({super.key, required this.requests, required this.offices});
+  final List<HelpRequest> requests;
+  final List<HelpOffice> offices;
+
+  Future<void> _replyAll(BuildContext context, WidgetRef ref, String? officeId, String topic, int count) async {
+    final msg = TextEditingController();
+    RequestStatus? status;
+    final ok = await showDialog<bool>(
+      context: context,
+      builder: (ctx) => StatefulBuilder(
+        builder: (ctx, setS) => AlertDialog(
+          title: Text('Reply to all $count: $topic'),
+          content: Column(mainAxisSize: MainAxisSize.min, children: [
+            TextField(
+              controller: msg,
+              maxLines: 3,
+              decoration: const InputDecoration(
+                  labelText: 'One reply for everyone', hintText: 'e.g. Marks for BDA2207 are now on the portal.'),
+            ),
+            const SizedBox(height: 8),
+            DropdownButtonFormField<RequestStatus?>(
+              initialValue: status,
+              decoration: const InputDecoration(labelText: 'Also change status'),
+              items: const [
+                DropdownMenuItem(value: null, child: Text('Keep as it is')),
+                DropdownMenuItem(value: RequestStatus.inProgress, child: Text('In progress')),
+                DropdownMenuItem(value: RequestStatus.resolved, child: Text('Resolved')),
+              ],
+              onChanged: (v) => setS(() => status = v),
+            ),
+          ]),
+          actions: [
+            TextButton(onPressed: () => Navigator.pop(ctx, false), child: const Text('Cancel')),
+            FilledButton(onPressed: () => Navigator.pop(ctx, true), child: const Text('Send to all')),
+          ],
+        ),
+      ),
+    );
+    if (ok != true || msg.text.trim().length < 3) return;
+    try {
+      final n = await ref
+          .read(repositoryProvider)
+          .replyToTopic(officeId: officeId, topic: topic, message: msg.text.trim(), status: status);
+      ref.invalidate(myRequestsProvider);
+      if (context.mounted) showSnack(context, 'Sent to $n students.');
+    } catch (e) {
+      if (context.mounted) showSnack(context, '$e'.replaceFirst('Exception: ', ''));
+    }
+  }
+
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final groups = <(String?, String), int>{};
+    for (final r in requests) {
+      if (r.topic == null || (r.status != RequestStatus.open && r.status != RequestStatus.inProgress)) continue;
+      groups.update((r.officeId, r.topic!), (n) => n + 1, ifAbsent: () => 1);
+    }
+    final big = groups.entries.where((e) => e.value >= 2).toList()..sort((a, b) => b.value.compareTo(a.value));
+    if (big.isEmpty) return const SizedBox.shrink();
+    return Card(
+      child: Padding(
+        padding: const EdgeInsets.all(12),
+        child: Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
+          Text('Same problem, many students', style: Theme.of(context).textTheme.titleSmall?.copyWith(fontWeight: FontWeight.w800)),
+          const Text('Fix it once and answer everyone together.'),
+          for (final e in big)
+            ListTile(
+              contentPadding: EdgeInsets.zero,
+              leading: CircleAvatar(child: Text('${e.value}')),
+              title: Text(e.key.$2),
+              subtitle: Text(offices.where((o) => o.id == e.key.$1).firstOrNull?.name ?? 'General desk'),
+              trailing: TextButton(
+                onPressed: () => _replyAll(context, ref, e.key.$1, e.key.$2, e.value),
+                child: const Text('Reply to all'),
+              ),
+            ),
+        ]),
       ),
     );
   }

@@ -229,15 +229,19 @@ class SupabaseRepository implements CampusRepository {
     // refuses a second row with that id, so one complaint is always one row.
     // The first "Request submitted." line is added by the database itself
     // (trigger in 0013), in the same step, so nothing can be half-saved.
+    Future<Map<String, dynamic>> insert(Map<String, dynamic> m) =>
+        _client.from('help_requests').insert(m).select().single();
+    final m = r.toMap()
+      ..remove('created_at')
+      ..remove('updated_at');
     try {
-      final row = await _client
-          .from('help_requests')
-          .insert(r.toMap()
-            ..remove('created_at')
-            ..remove('updated_at'))
-          .select()
-          .single();
-      return HelpRequest.fromMap(row);
+      try {
+        return HelpRequest.fromMap(await insert(m));
+      } on PostgrestException catch (e) {
+        // Database not updated yet (no topic column): send it without the topic.
+        if (e.code != 'PGRST204' || !m.containsKey('topic')) rethrow;
+        return HelpRequest.fromMap(await insert(m..remove('topic')));
+      }
     } on PostgrestException catch (e) {
       if (e.code != '23505') rethrow; // 23505 = this id is already saved
       final row = await _client.from('help_requests').select().eq('id', r.id).single();
@@ -250,6 +254,14 @@ class SupabaseRepository implements CampusRepository {
       'moveRequest|$requestId|$officeId',
       // One database step that checks who may move it and logs the move.
       () => _client.rpc('move_help_request', params: {'p_request': requestId, 'p_office': officeId}));
+
+  @override
+  Future<int> replyToTopic({required String? officeId, required String topic, required String message, RequestStatus? status}) =>
+      writeOnce.run('replyToTopic|$officeId|$topic|$message|${status?.name}', () async {
+        final n = await _client.rpc('reply_to_topic',
+            params: {'p_office': officeId, 'p_topic': topic, 'p_message': message, 'p_status': status?.db});
+        return (n as num).toInt();
+      });
 
   @override
   Future<Set<String>> myHandledOffices() async {

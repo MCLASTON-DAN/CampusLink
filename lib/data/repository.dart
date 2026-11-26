@@ -38,6 +38,9 @@ abstract class CampusRepository {
   /// it is open, or whoever handles it now. Adds a line to its timeline.
   Future<void> moveRequest(String requestId, String? officeId, String officeName);
 
+  /// Answer every open request on one topic at once. Returns how many.
+  Future<int> replyToTopic({required String? officeId, required String topic, required String message, RequestStatus? status});
+
   /// Ids of the help offices I handle requests for.
   Future<Set<String>> myHandledOffices();
 

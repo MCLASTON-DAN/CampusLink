@@ -89,7 +89,7 @@ class LostFoundScreen extends ConsumerWidget {
               icon: const Icon(Icons.add),
               label: const Text('Add item'),
               onPressed: () async {
-                final t = TextEditingController(), d = TextEditingController(), w = TextEditingController(), s = TextEditingController();
+                final t = TextEditingController(), d = TextEditingController(), w = TextEditingController(), s = TextEditingController(text: kLostFoundDropOff);
                 final ok = await showDialog<bool>(
                   context: context,
                   builder: (ctx) => AlertDialog(
@@ -117,8 +117,12 @@ class LostFoundScreen extends ConsumerWidget {
         value: ref.watch(lostFoundProvider),
         onRetry: () => ref.invalidate(lostFoundProvider),
         builder: (list) => list.isEmpty
-            ? const EmptyState(icon: Icons.inventory_2_outlined, title: 'Nothing listed', subtitle: 'Only offices post found items.')
+            ? ListView(padding: const EdgeInsets.all(12), children: const [
+                _HandInNotice(),
+                EmptyState(icon: Icons.inventory_2_outlined, title: 'Nothing listed', subtitle: 'Only offices post found items.'),
+              ])
             : ListView(padding: const EdgeInsets.all(12), children: [
+                const _HandInNotice(),
                 const Padding(
                   padding: EdgeInsets.only(bottom: 8),
                   child: Text('To get an item back, say something only the owner knows. The office checks before handing it over.'),
@@ -1263,4 +1267,22 @@ class TutorReportsScreen extends ConsumerWidget {
       ),
     );
   }
+}
+
+
+/// Where found items are handed in. One place, so owners know where to look.
+const kLostFoundDropOff = 'Guild office';
+
+class _HandInNotice extends StatelessWidget {
+  const _HandInNotice();
+  @override
+  Widget build(BuildContext context) => Card(
+        color: Theme.of(context).colorScheme.primaryContainer,
+        child: const ListTile(
+          leading: Icon(Icons.volunteer_activism_rounded),
+          title: Text('Found something? Take it to the $kLostFoundDropOff.'),
+          subtitle: Text('They keep it safe, list it here, and check the owner before handing it back. '
+              'Lost something? Check here first, then ask at the $kLostFoundDropOff.'),
+        ),
+      );
 }

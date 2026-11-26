@@ -24,6 +24,7 @@ class _OfficeEditState extends ConsumerState<OfficeEditScreen> {
   HelpOffice? _o;
   final _desc = TextEditingController(), _loc = TextEditingController(), _dirs = TextEditingController();
   final _does = TextEditingController(), _dont = TextEditingController(), _bring = TextEditingController();
+  final _topics = TextEditingController();
   final _open = TextEditingController(text: '08:00'), _close = TextEditingController(text: '17:00');
   final _lat = TextEditingController(), _lng = TextEditingController(), _source = TextEditingController();
   final _days = <int>{1, 2, 3, 4, 5};
@@ -43,6 +44,7 @@ class _OfficeEditState extends ConsumerState<OfficeEditScreen> {
         _loc.text = o.location;
         _dirs.text = o.directions ?? '';
         _does.text = o.whatWeDo.join('\n');
+        _topics.text = o.topics.join('\n');
         _dont.text = o.whatWeDont.join('\n');
         _bring.text = o.bring.join('\n');
         _lat.text = o.lat?.toString() ?? '';
@@ -74,6 +76,14 @@ class _OfficeEditState extends ConsumerState<OfficeEditScreen> {
         TextField(controller: _desc, maxLines: 3, decoration: const InputDecoration(labelText: 'What is this office?')),
         const SizedBox(height: 8),
         TextField(controller: _loc, decoration: const InputDecoration(labelText: 'Where (building, floor, room)')),
+        const SizedBox(height: 8),
+        TextField(
+            controller: _topics,
+            minLines: 3,
+            maxLines: 10,
+            decoration: const InputDecoration(
+                labelText: 'Request topics (one per line, up to 12)',
+                helperText: 'Students pick one, so similar problems group together. "Something else" is always added.')),
         const SizedBox(height: 8),
         TextField(controller: _does, minLines: 2, maxLines: 6, decoration: const InputDecoration(labelText: 'What it DOES (one per line)')),
         const SizedBox(height: 8),
@@ -140,6 +150,7 @@ class _OfficeEditState extends ConsumerState<OfficeEditScreen> {
             description: _desc.text.trim(),
             location: _loc.text.trim(),
             whatWeDo: _lines(_does.text),
+            topics: _lines(_topics.text).where((t) => t.length >= 2 && t.length <= 60 && t != 'Other').take(12).toList(),
             whatWeDont: _lines(_dont.text),
             bring: _lines(_bring.text),
             directions: _dirs.text.trim(),

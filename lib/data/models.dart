@@ -208,6 +208,8 @@ class HelpOffice {
   final List<String> keywords;
 
   // Real, administration-confirmed details (empty until entered):
+  /// The problems this office handles; a request picks one (or 'Other').
+  final List<String> topics;
   final List<String> whatWeDo;
   final List<String> whatWeDont;
   final List<String> bring; // what you must bring to be served
@@ -233,6 +235,7 @@ class HelpOffice {
     this.contactPhone,
     this.openHours,
     this.keywords = const [],
+    this.topics = const [],
     this.whatWeDo = const [],
     this.whatWeDont = const [],
     this.bring = const [],
@@ -253,6 +256,7 @@ class HelpOffice {
     String? description,
     String? location,
     String? openHours,
+    List<String>? topics,
     List<String>? whatWeDo,
     List<String>? whatWeDont,
     List<String>? bring,
@@ -276,6 +280,7 @@ class HelpOffice {
         contactPhone: contactPhone,
         openHours: openHours ?? this.openHours,
         keywords: keywords,
+        topics: topics ?? this.topics,
         whatWeDo: whatWeDo ?? this.whatWeDo,
         whatWeDont: whatWeDont ?? this.whatWeDont,
         bring: bring ?? this.bring,
@@ -300,6 +305,7 @@ class HelpOffice {
         contactPhone: m['contact_phone'],
         openHours: m['open_hours'],
         keywords: _strList(m['keywords']),
+        topics: _strList(m['topics']),
         whatWeDo: _strList(m['what_we_do']),
         whatWeDont: _strList(m['what_we_dont']),
         bring: _strList(m['bring']),
@@ -325,6 +331,7 @@ class HelpOffice {
         'contact_phone': contactPhone,
         'open_hours': openHours,
         'keywords': keywords,
+        'topics': topics,
         'what_we_do': whatWeDo,
         'what_we_dont': whatWeDont,
         'bring': bring,
@@ -365,6 +372,9 @@ class HelpRequest {
   final String description;
   final RequestStatus status;
   final String priority;
+
+  /// One of the office's topics, or 'Other'. Groups similar problems.
+  final String? topic;
   final DateTime createdAt;
   final DateTime updatedAt;
 
@@ -376,6 +386,7 @@ class HelpRequest {
     required this.description,
     this.status = RequestStatus.open,
     this.priority = 'normal',
+    this.topic,
     required this.createdAt,
     required this.updatedAt,
   });
@@ -388,6 +399,7 @@ class HelpRequest {
         description: description,
         status: status ?? this.status,
         priority: priority,
+        topic: topic,
         createdAt: createdAt,
         updatedAt: updatedAt ?? this.updatedAt,
       );
@@ -400,6 +412,7 @@ class HelpRequest {
         description: m['description'],
         status: RequestStatusX.parse(m['status']),
         priority: m['priority'] ?? 'normal',
+        topic: m['topic'],
         createdAt: _dt(m['created_at']),
         updatedAt: _dt(m['updated_at']),
       );
@@ -412,6 +425,7 @@ class HelpRequest {
         'description': description,
         'status': status.db,
         'priority': priority,
+        if (topic != null) 'topic': topic,
         'created_at': createdAt.toIso8601String(),
         'updated_at': updatedAt.toIso8601String(),
       };
