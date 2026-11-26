@@ -135,7 +135,7 @@ grant execute on function public.move_help_request(uuid, uuid) to authenticated;
 --    when their access changes (so the app refreshes).
 alter table public.notifications drop constraint if exists notifications_kind_check;
 alter table public.notifications add constraint notifications_kind_check
-  check (kind in ('course', 'official', 'event', 'tutor', 'request', 'access'));
+  check (kind in ('course', 'official', 'event', 'tutor', 'request', 'office', 'access'));
 
 create or replace function public.notify_office_handlers() returns trigger
 language plpgsql security definer set search_path = public as $$
