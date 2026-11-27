@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
@@ -42,7 +43,7 @@ class _CampusMapState extends ConsumerState<CampusMap> {
 
     return LayoutBuilder(
       builder: (context, c) {
-        final wide = c.maxWidth >= 760;
+        final wide = ScreenSize.within(context, c.maxWidth) >= ScreenSize.expanded;
         final map = AspectRatio(
           aspectRatio: 1.15,
           child: Container(

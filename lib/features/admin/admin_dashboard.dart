@@ -3,11 +3,12 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:intl/intl.dart';
 
-import '../community/tutor_checks.dart';
+import '../../core/layout.dart';
 import '../../data/community_models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
 import '../../widgets/section.dart';
+import '../community/tutor_checks.dart';
 
 final _overviewProvider = FutureProvider.autoDispose<AdminOverview>((ref) => ref.watch(communityProvider).adminOverview());
 
@@ -91,7 +92,7 @@ class _Tiles extends StatelessWidget {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     return LayoutBuilder(builder: (context, c) {
-      final cols = c.maxWidth > 700 ? 3 : 2;
+      final cols = ScreenSize.within(context, c.maxWidth).columns(compact: 2, medium: 3);
       final w = (c.maxWidth - (cols - 1) * 10) / cols;
       return Wrap(spacing: 10, runSpacing: 10, children: [
         for (final (label, n, sub, icon, route) in items)

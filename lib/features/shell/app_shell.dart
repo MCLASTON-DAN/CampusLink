@@ -2,8 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../../widgets/common.dart';
-
+import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 
@@ -42,7 +41,8 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final wide = isWideLayout(context);
+    final size = ScreenSize.of(context);
+    final wide = size >= ScreenSize.expanded;
     final demo = ref.watch(isDemoModeProvider);
 
     final body = Column(
@@ -78,8 +78,8 @@ class AppShell extends ConsumerWidget {
             NavigationRail(
               selectedIndex: _index,
               onDestinationSelected: (i) => context.go(_dests[i].path),
-              extended: MediaQuery.sizeOf(context).width >= 1240,
-              labelType: MediaQuery.sizeOf(context).width >= 1240 ? NavigationRailLabelType.none : NavigationRailLabelType.all,
+              extended: size == ScreenSize.large,
+              labelType: size == ScreenSize.large ? NavigationRailLabelType.none : NavigationRailLabelType.all,
               leading: Padding(
                 padding: const EdgeInsets.only(bottom: 16, top: 8),
                 child: Container(

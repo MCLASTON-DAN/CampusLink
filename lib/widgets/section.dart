@@ -1,5 +1,7 @@
 import 'package:flutter/material.dart';
 
+import '../core/layout.dart';
+
 /// Keeps reading width comfortable on big screens and adds page padding.
 class PageBody extends StatelessWidget {
   const PageBody({super.key, required this.children, this.maxWidth = 1100, this.padding});
@@ -9,8 +11,7 @@ class PageBody extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
-    final w = MediaQuery.sizeOf(context).width;
-    final side = w < 600 ? 16.0 : 24.0;
+    final side = ScreenSize.of(context) == ScreenSize.compact ? 16.0 : 24.0;
     return ListView(
       padding: padding ?? EdgeInsets.fromLTRB(side, 8, side, 32),
       children: [
@@ -91,7 +92,7 @@ class TileGrid extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
-        final cols = c.maxWidth >= 900 ? 3 : (c.maxWidth >= 560 ? 2 : 1);
+        final cols = ScreenSize.within(context, c.maxWidth).columns();
         const gap = 10.0;
         final w = (c.maxWidth - gap * (cols - 1)) / cols;
         return Wrap(spacing: gap, runSpacing: gap, children: [for (final ch in children) SizedBox(width: w, child: ch)]);

@@ -1,13 +1,14 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'package:go_router/go_router.dart';
 
 import '../../core/config.dart';
+import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
-import '../../widgets/common.dart';
 import '../../data/repository.dart' show EmailConfirmationNeeded;
+import '../../widgets/common.dart';
 import '../account/account_api.dart';
-import 'package:go_router/go_router.dart';
 
 class LoginScreen extends ConsumerStatefulWidget {
   const LoginScreen({super.key});
@@ -159,7 +160,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
   @override
   Widget build(BuildContext context) {
     final demo = ref.watch(isDemoModeProvider);
-    final wide = MediaQuery.sizeOf(context).width >= 720;
+    final wide = ScreenSize.of(context) >= ScreenSize.expanded;
 
     return Scaffold(
       body: AnimatedBuilder(

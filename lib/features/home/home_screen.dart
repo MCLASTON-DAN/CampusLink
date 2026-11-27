@@ -2,18 +2,18 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
-import '../notifications/notifications.dart';
-import '../../widgets/media.dart';
-
+import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/models.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
-import '../account/interests.dart';
+import '../../widgets/media.dart';
 import '../../widgets/section.dart';
+import '../account/interests.dart';
 import '../community/events_screens.dart';
 import '../community/news_screen.dart';
 import '../install/install_screen.dart';
+import '../notifications/notifications.dart';
 
 /// Home: what matters today, in the order a student needs it.
 class HomeScreen extends ConsumerWidget {
@@ -375,8 +375,9 @@ class _ResponsiveRow extends StatelessWidget {
   final List<Widget> children;
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
-        if (c.maxWidth >= 700 && isWideLayout(context, 700)) {
-          final cols = c.maxWidth >= 1000 ? 3 : 2;
+        final size = ScreenSize.within(context, c.maxWidth);
+        if (size >= ScreenSize.medium) {
+          final cols = size.columns(medium: 2, expanded: 2, large: 3);
           const gap = 12.0;
           final w = (c.maxWidth - gap * (cols - 1)) / cols;
           return Wrap(spacing: gap, runSpacing: gap, children: [

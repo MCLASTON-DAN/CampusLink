@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../core/layout.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
 
@@ -20,8 +21,7 @@ class _DirectoryScreenState extends ConsumerState<DirectoryScreen> {
   Widget build(BuildContext context) {
     final data = ref.watch(officesProvider);
     const cats = ['all', 'academic', 'finance', 'admin', 'it', 'library', 'welfare', 'health'];
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 1000 ? 3 : (width >= 640 ? 2 : 1);
+    final cols = ScreenSize.of(context).columns();
 
     return Scaffold(
       appBar: AppBar(title: const Text('Help directory')),

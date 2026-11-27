@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 
+import '../../core/layout.dart';
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 import '../../widgets/common.dart';
@@ -107,8 +108,7 @@ class _ClubsTab extends ConsumerWidget {
   Widget build(BuildContext context, WidgetRef ref) {
     final data = ref.watch(clubsProvider);
     final gradients = [Brand.primaryGradient, Brand.oceanGradient, Brand.forestGradient, Brand.goldGradient, Brand.roseGradient];
-    final width = MediaQuery.sizeOf(context).width;
-    final cols = width >= 900 ? 3 : (width >= 560 ? 2 : 1);
+    final cols = ScreenSize.of(context).columns();
     return AsyncBody(
       value: data,
       onRetry: () => ref.invalidate(clubsProvider),
