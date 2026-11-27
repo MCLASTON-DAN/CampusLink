@@ -1,9 +1,11 @@
 import 'dart:async';
 import 'package:flutter/material.dart';
+import 'package:url_launcher/url_launcher.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:intl/intl.dart';
 
 import '../core/theme.dart';
+import '../core/config.dart';
 
 /// A card painted with a brand gradient. Used for hero tiles and feature entry points.
 class GradientCard extends StatelessWidget {
@@ -311,3 +313,24 @@ void showSnack(BuildContext context, String msg) {
     ..showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
 }
 
+
+
+/// "Privacy policy · Terms of use", opened in the browser.
+class LegalLinks extends StatelessWidget {
+  const LegalLinks({super.key});
+
+  @override
+  Widget build(BuildContext context) {
+    final style = Theme.of(context).textTheme.bodySmall;
+    Widget link(String label, String url) => TextButton(
+          style: TextButton.styleFrom(visualDensity: VisualDensity.compact, textStyle: style),
+          onPressed: () => launchUrl(Uri.parse(url), mode: LaunchMode.externalApplication),
+          child: Text(label),
+        );
+    return Wrap(alignment: WrapAlignment.center, crossAxisAlignment: WrapCrossAlignment.center, children: [
+      link('Privacy policy', AppConfig.privacyUrl),
+      Text('·', style: style),
+      link('Terms of use', AppConfig.termsUrl),
+    ]);
+  }
+}

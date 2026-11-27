@@ -15,6 +15,9 @@ class AppConfig {
 
   /// Public web address and the always-latest Android download.
   static const webUrl = 'https://campuslink.danmclaston.workers.dev';
+  /// Public pages (plain HTML, also linked from Google's sign-in screen).
+  static const privacyUrl = '$webUrl/privacy/';
+  static const termsUrl = '$webUrl/terms/';
   static const androidApkUrl =
       'https://github.com/MCLASTON-DAN/CampusLink/releases/download/android-latest/campuslink.apk';
 }

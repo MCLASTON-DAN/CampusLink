@@ -339,6 +339,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                   onPressed: () => setState(() => _signup = !_signup),
                   child: Text(_signup ? 'I already have an account' : 'New here? Create an account'),
                 ),
+                const LegalLinks(),
               ],
             ),
           ),

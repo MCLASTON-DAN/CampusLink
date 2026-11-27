@@ -1,0 +1,49 @@
+/* Shared look for CampusLink's public pages (home, privacy, terms).
+   Plain HTML so Google, search engines and screen readers can read them
+   without loading the app. Colours match the app. */
+:root {
+  --brand: #3B2DB3;
+  --brand-2: #7C3AED;
+  --ink: #1d1b2f;
+  --muted: #5b5872;
+  --line: #e6e4f2;
+  --bg: #f7f6fd;
+}
+* { box-sizing: border-box; }
+html { -webkit-text-size-adjust: 100%; }
+body {
+  margin: 0; background: var(--bg); color: var(--ink);
+  font: 16px/1.65 system-ui, -apple-system, "Segoe UI", Roboto, Arial, sans-serif;
+}
+a { color: var(--brand); }
+.top {
+  background: linear-gradient(135deg, var(--brand), var(--brand-2) 60%, #FF6B6B);
+  color: #fff;
+}
+.top .wrap { display: flex; align-items: center; justify-content: space-between; padding-top: 18px; padding-bottom: 18px; }
+.brand { display: flex; align-items: center; gap: 10px; color: #fff; text-decoration: none; font-weight: 900; font-size: 20px; letter-spacing: -.3px; }
+.brand img { width: 34px; height: 34px; border-radius: 10px; }
+.wrap { max-width: 860px; margin: 0 auto; padding: 0 20px; }
+.btn {
+  display: inline-block; background: #fff; color: var(--brand); text-decoration: none;
+  font-weight: 700; padding: 10px 18px; border-radius: 12px;
+}
+.btn.solid { background: var(--brand); color: #fff; }
+.hero { padding: 48px 0 56px; }
+.hero h1 { font-size: clamp(30px, 6vw, 46px); line-height: 1.15; margin: 0 0 14px; letter-spacing: -1px; }
+.hero p { font-size: 18px; max-width: 620px; opacity: .95; margin: 0 0 24px; }
+main { padding: 36px 0 24px; }
+.cards { display: grid; grid-template-columns: repeat(auto-fit, minmax(230px, 1fr)); gap: 14px; margin: 8px 0 28px; }
+.card { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 18px; }
+.card h3 { margin: 0 0 6px; font-size: 17px; }
+.card p { margin: 0; color: var(--muted); font-size: 15px; }
+.doc { background: #fff; border: 1px solid var(--line); border-radius: 16px; padding: 28px clamp(18px, 4vw, 40px); }
+.doc h1 { margin: 0 0 4px; font-size: 30px; letter-spacing: -.5px; }
+.doc h2 { margin: 30px 0 8px; font-size: 20px; }
+.doc .updated { color: var(--muted); margin: 0 0 20px; }
+.doc li { margin: 4px 0; }
+table { border-collapse: collapse; width: 100%; font-size: 15px; }
+th, td { text-align: left; vertical-align: top; padding: 9px 10px; border-bottom: 1px solid var(--line); }
+th { background: var(--bg); }
+footer { color: var(--muted); font-size: 14px; padding: 18px 0 40px; }
+footer nav a { margin-right: 16px; }
