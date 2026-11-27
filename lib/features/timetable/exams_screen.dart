@@ -286,7 +286,7 @@ TimeOfDay _tod(String hhmm) {
 /// Import exams from the official Excel/CSV, like the class timetable:
 /// pick your group(s), see what will be added, save. Already-known exams are skipped.
 Future<void> importExams(BuildContext context, WidgetRef ref, {required bool official}) async {
-  final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xlsm', 'csv', 'tsv'], withData: true);
+  final res = await FilePicker.platform.pickFiles(type: FileType.custom, allowedExtensions: ['xlsx', 'xlsm', 'xls', 'csv', 'tsv'], withData: true);
   final f = res?.files.firstOrNull;
   if (f?.bytes == null || !context.mounted) return;
   List<ExamGroup> groups;
@@ -297,7 +297,7 @@ Future<void> importExams(BuildContext context, WidgetRef ref, {required bool off
     return;
   }
   if (groups.isEmpty) {
-    showSnack(context, 'No exams with dates found. The file needs a Date column (and Time, Code). Send it to support if it looks right.');
+    showSnack(context, 'No exams found in this file. Each exam row needs a date, a time and a course code. If the file looks right, send it to support.');
     return;
   }
   final me = ref.read(currentUserProvider).valueOrNull;

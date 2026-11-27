@@ -24,7 +24,7 @@ class _TimetableScreenState extends ConsumerState<TimetableScreen> {
   Future<void> _import() async {
     final res = await FilePicker.platform.pickFiles(
       type: FileType.custom,
-      allowedExtensions: ['csv', 'tsv', 'xlsx', 'xlsm', 'txt'],
+      allowedExtensions: ['csv', 'tsv', 'xlsx', 'xlsm', 'xls', 'txt'],
       withData: true,
     );
     final f = res?.files.firstOrNull;

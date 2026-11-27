@@ -1,3 +1,3 @@
-Sign-in alerts: you're told each time your account is opened on a new sign-in
-New: Me > Your devices, see where you're signed in and sign any device out
-"This wasn't me" link in the alert email signs out every device
+Exam timetables: official university files now import (any layout, all sheets)
+Shared papers (e.g. BIT110/DIT110) count for every programme
+Clear message for old .xls files

@@ -45,10 +45,15 @@ class TimetableImporter {
       };
     } else if (lower.endsWith('.xlsx') || lower.endsWith('.xlsm')) {
       sheets = readXlsx(bytes);
+    } else if (lower.endsWith('.xls')) {
+      throw UnsupportedError(
+        'This is the old Excel 97-2003 format (.xls). Open it in Excel or Google Sheets, '
+        'choose Save As / Download as .xlsx, then upload that file.',
+      );
     } else {
       throw UnsupportedError(
-        'Only .csv, .tsv and .xlsx files can be read on-device. '
-        'Export your PDF/Word timetable to Excel or CSV first, or add classes manually.',
+        'Only Excel (.xlsx) and CSV files can be read. '
+        'Export your PDF/Word timetable to Excel or CSV first, or add entries by hand.',
       );
     }
 

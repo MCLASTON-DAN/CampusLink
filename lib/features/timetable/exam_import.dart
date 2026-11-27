@@ -16,10 +16,16 @@ class ExamGroup {
 /// Reads an exam timetable from Excel or CSV, the same way class timetables
 /// are read, but every row has a real DATE.
 ///
-/// Understands: a header row with a Date column (plus Time or Start/End,
-/// Code, Module/Paper, Room/Venue, Campus); section rows such as
-/// "YEAR TWO SEMESTER ONE" that split the sheet into pickable groups; and
-/// sheets with no header in the order Date | Time | Code | Module | Room.
+/// Files from different offices look different, so each row is read by what
+/// its cells contain, not by where they are:
+///   * a date  ("Sat | 05-Dec", "07/12/2026", "Monday 7th December 2026", Excel numbers)
+///   * a time  ("09:00-12:00", "2.00pm - 5.00pm", "MORNING")
+///   * a course code ("BDA1101", "LLM 711", "IRDS-316")
+/// A heading row (Date or Day, Time, Code, Module, Room, Campus, Lecturer)
+/// is used when there is one, to name the other cells. Rows whose columns
+/// are shifted still read correctly, and sheets without headings work too.
+/// Section rows such as "YEAR TWO SEMESTER ONE" split a sheet into pickable
+/// groups. A date written once for several rows (merged cells) carries down.
 class ExamImporter {
   static const _uuid = Uuid();
 
@@ -44,75 +50,187 @@ class ExamImporter {
     return [for (var i = 0; i < groups.length; i++) if (picked.contains(asClasses[i])) groups[i]];
   }
 
-  static List<ExamGroup> _parseSheet(String sheet, List<List<String>> rows) {
-    final hi = rows.indexWhere((r) {
-      final l = r.map((c) => c.toLowerCase().trim()).toList();
-      return l.any((c) => c.startsWith('date')) && l.any((c) => c.contains('code') || c.contains('module') || c.contains('paper') || c.contains('course'));
-    });
-    List<String> h;
-    if (hi >= 0) {
-      h = rows[hi].map((c) => c.toLowerCase().trim()).toList();
-    } else {
-      // No header: accept the usual order if enough rows start with a date.
-      final dated = rows.where((r) => r.length >= 3 && parseDate(r[0]) != null).length;
-      if (dated < 2) return const [];
-      h = const ['date', 'time', 'code', 'module', 'room'];
-    }
-    int col(List<String> keys) => h.indexWhere((x) => keys.any((k) => x == k || x.startsWith(k) || x.contains(k)));
-    final cDate = col(['date']), cTime = col(['time', 'session', 'period']);
-    final cStart = col(['start', 'from']), cEnd = col(['end', 'to', 'finish']);
-    final cCode = col(['code']);
-    final cName = col(['module', 'paper', 'course name', 'subject', 'title', 'course']);
-    final cRoom = col(['room', 'venue', 'hall']), cCampus = col(['campus']);
-    String at(List<String> r, int i) => i >= 0 && i < r.length ? r[i].trim() : '';
+  // BDA1101, LLM 711, IRDS-316, and variants with a suffix like BJC110-HS.
+  static final _code = RegExp(r'^[A-Z]{2,6}[ -]?\d{3,4}[A-Z]?(-[A-Z]{1,4})?$');
+  static final _section =
+      RegExp(r'\b(YEAR|SEMESTER|LEVEL|GROUP|STREAM|INTAKE|COHORT|WEEKEND|EVENING|MODULAR|PART)\b', caseSensitive: false);
+  static final _person = RegExp(r'^(dr|mr|mrs|ms|miss|prof|assoc|eng|rev|sr|fr)\b\.?', caseSensitive: false);
 
+  /// The course codes in a cell: "BDA1101", "LLM 711", or a paper shared by
+  /// several programmes, "BIT122/BSE121/DDA1204". Empty if it isn't codes.
+  static List<String> courseCodes(String cell) {
+    final parts = cell.trim().toUpperCase().split(RegExp(r'\s*(?:/|,|;|&|\bAND\b)\s*')).where((x) => x.isNotEmpty).toList();
+    if (parts.isEmpty || !parts.every(_code.hasMatch)) return const [];
+    // Same rule as the rest of CampusLink (norm_code): capitals, no spaces.
+    return [for (final x in parts) x.replaceAll(RegExp(r'\s+'), '')];
+  }
+
+  static bool isCourseCode(String s) => courseCodes(s).isNotEmpty;
+
+  static List<ExamGroup> _parseSheet(String sheet, List<List<String>> rows) {
+    final head = _Heading.find(rows);
     final progName = rows
         .take(6)
         .expand((r) => r)
-        .firstWhere((c) => RegExp(r'BACHELOR|DIPLOMA|MASTER|CERTIFICATE', caseSensitive: false).hasMatch(c), orElse: () => '')
+        .firstWhere((c) => RegExp(r'BACHELOR|DIPLOMA|MASTER|CERTIFICATE|DOCTOR', caseSensitive: false).hasMatch(c), orElse: () => '')
         .trim();
+
     final groups = <ExamGroup>[];
     var title = '';
     var current = <ExamEntry>[];
+    final seen = <String>{};
     void close() {
       if (current.isNotEmpty) groups.add(ExamGroup(sheet: sheet, title: title, entries: current, programmeName: progName));
       current = <ExamEntry>[];
     }
 
     DateTime? lastDate; // merged date cells: the date is only on the first row
-    for (final r in rows.skip(hi + 1)) {
+    for (final r in rows.skip(head == null ? 0 : head.row + 1)) {
       if (r.every((c) => c.trim().isEmpty)) continue;
-      final rawDate = at(r, cDate);
-      final date = parseDate(rawDate) ?? (rawDate.isEmpty ? lastDate : null);
-      final slot = cStart >= 0 && cEnd >= 0 && cStart != cTime
-          ? _pair(at(r, cStart), at(r, cEnd))
-          : parseExamSlot(at(r, cTime));
-      final code = at(r, cCode), name = cName == cCode ? '' : at(r, cName);
-      if (date == null || slot == null || (code.isEmpty && name.isEmpty)) {
-        // A section row like "YEAR TWO SEMESTER ONE" (text, no date, no code).
-        final t = r.firstWhere((c) => c.trim().isNotEmpty, orElse: () => '').trim();
-        if (t.isNotEmpty && parseDate(t) == null && code.isEmpty && slot == null) {
+      final row = _readRow(r, head);
+      if (row == null) {
+        // Not an exam. A short text row may start a new section.
+        // Ignore stray cells: numbers and Excel errors like "#REF!".
+        final words = {
+          for (final c in r)
+            if (RegExp('[A-Za-z]{2}').hasMatch(c) && !c.trim().startsWith('#')) c.trim().replaceAll(RegExp(r'\s+'), ' ')
+        };
+        final text = words.join(' ');
+        final isSection = words.length <= 2 &&
+            text.length <= 80 &&
+            RegExp('[A-Za-z]').hasMatch(text) &&
+            !words.any((w) => isCourseCode(w) || _looksLikeDate(w) || parseExamSlot(w) != null) &&
+            (_section.hasMatch(text) || current.isNotEmpty || groups.isNotEmpty || head != null);
+        if (isSection) {
           close();
-          title = t.replaceAll(RegExp(r'\s+'), ' ');
+          title = text;
           lastDate = null;
         }
         continue;
       }
+      final date = row.date ?? lastDate;
+      if (date == null) continue;
       lastDate = date;
-      current.add(ExamEntry(
-        id: _uuid.v4(),
-        courseCode: (code.isEmpty ? name : code).toUpperCase(),
-        courseName: name.isEmpty ? null : name,
-        date: date,
-        start: slot.$1,
-        end: slot.$2,
-        room: at(r, cRoom).isEmpty ? null : at(r, cRoom),
-        campus: at(r, cCampus).isEmpty ? null : at(r, cCampus),
-      ));
+      // A shared paper becomes one exam per code, so each programme's students get it.
+      for (final code in row.codes) {
+        if (!seen.add('$title|$code|${date.toIso8601String()}|${row.slot.$1}')) continue; // same exam twice
+        current.add(ExamEntry(
+          id: _uuid.v4(),
+          courseCode: code,
+          courseName: row.name,
+          date: date,
+          start: row.slot.$1,
+          end: row.slot.$2,
+          room: row.room,
+          campus: row.campus,
+          notes: row.lecturer == null ? null : 'Lecturer: ${row.lecturer}',
+        ));
+      }
     }
     close();
     return groups;
   }
+
+  /// One exam from one row, or null if the row isn't an exam.
+  static _Row? _readRow(List<String> raw, _Heading? h) {
+    final cells = [for (final c in raw) c.trim()];
+    String at(int i) => i >= 0 && i < cells.length ? cells[i] : '';
+
+    // 1. The course code anchors the row. If this row is shifted against the
+    //    heading (extra or missing cells in front), move the heading with it.
+    var codeAt = h != null && isCourseCode(at(h.code)) ? h.code : cells.indexWhere(isCourseCode);
+    final shift = h != null && h.code >= 0 && codeAt >= 0 ? codeAt - h.code : 0;
+    int col(int i) => i < 0 ? -1 : i + shift;
+
+    // 2. The time: the heading's column, a Start/End pair, or any time cell.
+    (String, String)? slot;
+    var slotAt = -1;
+    if (h != null && h.start >= 0 && h.end >= 0) {
+      slot = _pair(at(col(h.start)), at(col(h.end)));
+      if (slot != null) slotAt = col(h.start);
+    }
+    if (slot == null && h != null && (slot = parseExamSlot(at(col(h.time)))) != null) slotAt = col(h.time);
+    if (slot == null) {
+      for (var i = 0; i < cells.length; i++) {
+        if (i == codeAt) continue;
+        final s = parseExamSlot(cells[i]);
+        if (s != null) {
+          slot = s;
+          slotAt = i;
+          break;
+        }
+      }
+    }
+    if (slot == null) return null;
+
+    // 3. The date: the heading's column, else the date cell nearest the time
+    //    (some files have other dates further along the row).
+    DateTime? date;
+    var dateAt = -1;
+    if (h != null && (date = parseDate(at(col(h.date)))) != null) dateAt = col(h.date);
+    if (date == null) {
+      var best = 1 << 30;
+      for (var i = 0; i < cells.length; i++) {
+        if (i == codeAt || i == slotAt || !_looksLikeDate(cells[i])) continue;
+        final d = parseDate(cells[i]);
+        if (d != null && (i - slotAt).abs() < best) {
+          best = (i - slotAt).abs();
+          date = d;
+          dateAt = i;
+        }
+      }
+    }
+
+    // 4. The paper's name: the heading's column, else the first text after the code.
+    bool free(int i) => i != codeAt && i != slotAt && i != dateAt && at(i).isNotEmpty;
+    var nameAt = h != null && free(col(h.name)) && !isCourseCode(at(col(h.name))) ? col(h.name) : -1;
+    if (nameAt < 0) {
+      for (var i = codeAt < 0 ? 0 : codeAt + 1; i < cells.length; i++) {
+        if (free(i) && !isCourseCode(cells[i]) && !_looksLikeDate(cells[i]) && RegExp('[A-Za-z]{3}').hasMatch(cells[i])) {
+          nameAt = i;
+          break;
+        }
+      }
+    }
+    if (codeAt < 0 && nameAt < 0) return null;
+
+    String? pick(int i) => i >= 0 && free(i) && i != nameAt ? at(i) : null;
+    // Without a heading: room is the cell after the name, lecturer is the one with a title (Dr, Mr…).
+    final room = h != null && h.room >= 0 ? pick(col(h.room)) : pick(nameAt + 1);
+    final campus = h != null && h.campus >= 0 ? pick(col(h.campus)) : null;
+    var lecturer = h != null && h.lecturer >= 0 ? pick(col(h.lecturer)) : null;
+    if (lecturer == null && h == null) {
+      for (var i = nameAt + 1; i < cells.length; i++) {
+        if (free(i) && _person.hasMatch(cells[i])) {
+          lecturer = cells[i];
+          break;
+        }
+      }
+    }
+    return _Row(
+      codes: codeAt >= 0 ? courseCodes(at(codeAt)) : [at(nameAt).toUpperCase()],
+      name: nameAt >= 0 ? at(nameAt) : null,
+      date: date,
+      slot: slot,
+      room: room,
+      campus: campus,
+      lecturer: lecturer,
+    );
+  }
+
+  /// A cheap check before parseDate when guessing which cell is the date, so
+  /// a paper called "Decision Analysis 2" isn't read as 2 December.
+  static bool _looksLikeDate(String raw) {
+    final s = raw.trim().toLowerCase();
+    if (s.isEmpty || s.length > 40) return false;
+    if (RegExp(r'^\d{5}(\.\d+)?$').hasMatch(s)) return true; // Excel date number
+    if (RegExp(r'^\d{4}-\d{1,2}-\d{1,2}|^\d{1,2}[/.\-]\d{1,2}[/.\-]\d{2,4}$').hasMatch(s)) return true;
+    final hasMonth = RegExp(r'\b(jan|feb|mar|apr|may|jun|jul|aug|sep|oct|nov|dec)').hasMatch(s);
+    return hasMonth && (_weekday.hasMatch(s) || RegExp(r'\d{4}').hasMatch(s) || RegExp(r'^\d{1,2}(st|nd|rd|th)?[\s\-/.]*[a-z]').hasMatch(s));
+  }
+
+  static final _weekday = RegExp(r'\b(mon|tue|wed|thu|fri|sat|sun)[a-z]*\b');
+  static const _weekdays = {'mon': 1, 'tue': 2, 'wed': 3, 'thu': 4, 'fri': 5, 'sat': 6, 'sun': 7};
 
   static const _months = {
     'jan': 1, 'feb': 2, 'mar': 3, 'apr': 4, 'may': 5, 'jun': 6,
@@ -143,10 +261,24 @@ class ExamImporter {
     final yearText = nums.where((x) => x.length == 4 || (x.length == 2 && x != day)).lastOrNull;
     final mo = _months[month[1]!]!;
     if (yearText != null) return _ok(_year(yearText), mo, int.parse(day));
-    // No year written: the next time that date comes round.
-    final now = DateTime.now();
-    final d = DateTime(now.year, mo, int.parse(day));
-    return d.isBefore(now.subtract(const Duration(days: 60))) ? DateTime(now.year + 1, mo, int.parse(day)) : d;
+    return _guessYear(mo, int.parse(day), _weekday.firstMatch(s)?.group(1), DateTime.now());
+  }
+
+  /// No year written ("Sat | 05-Dec"). If a weekday is given, the year where
+  /// that date falls on that weekday (nearest to today); otherwise the next
+  /// time the date comes round (up to 60 days back counts as this season).
+  static DateTime? _guessYear(int month, int day, String? weekday, DateTime now) {
+    final wanted = weekday == null ? null : _weekdays[weekday];
+    if (wanted != null) {
+      final fits = [
+        for (final y in [now.year, now.year + 1, now.year - 1])
+          if (_ok(y, month, day)?.weekday == wanted) _ok(y, month, day)!
+      ];
+      if (fits.isNotEmpty) return fits.first;
+    }
+    final d = _ok(now.year, month, day);
+    if (d == null) return null;
+    return d.isBefore(now.subtract(const Duration(days: 60))) ? _ok(now.year + 1, month, day) : d;
   }
 
   static int _year(String y) => y.length == 2 ? 2000 + int.parse(y) : int.parse(y);
@@ -183,4 +315,46 @@ class ExamImporter {
     final s = t(a), e = t(b);
     return s == null || e == null || e.compareTo(s) <= 0 ? null : (s, e);
   }
+}
+
+
+/// Which column holds what, from a heading row like
+/// "Day | Time | Code | Module | Campus | Room | Lecturer".
+class _Heading {
+  const _Heading(this.row, {this.date = -1, this.time = -1, this.start = -1, this.end = -1, this.code = -1, this.name = -1,
+      this.room = -1, this.campus = -1, this.lecturer = -1});
+  final int row, date, time, start, end, code, name, room, campus, lecturer;
+
+  static _Heading? find(List<List<String>> rows) {
+    for (var i = 0; i < rows.length && i < 25; i++) {
+      final l = [for (final c in rows[i]) c.toLowerCase().trim()];
+      int col(List<String> starts, {List<String> exact = const [], int not = -1}) => l.indexWhere(
+          (x) => x.isNotEmpty && (exact.contains(x) || starts.any(x.startsWith)) && l.indexOf(x) != not);
+      final date = col(['date', 'day', 'exam date', 'exam day']);
+      final code = col(['code', 'course code', 'unit code', 'module code', 'paper code', 'subject code']);
+      final name = col(['module', 'paper', 'course', 'subject', 'unit', 'title', 'description'], not: code);
+      if (date < 0 || (code < 0 && name < 0)) continue;
+      return _Heading(
+        i,
+        date: date,
+        time: col(['time', 'session', 'period', 'slot']),
+        start: col(['start', 'from']),
+        end: col(['end', 'finish'], exact: ['to']),
+        code: code,
+        name: name,
+        room: col(['room', 'venue', 'hall', 'location', 'centre', 'center']),
+        campus: col(['campus']),
+        lecturer: col(['lecturer', 'examiner', 'invigilator', 'tutor', 'teacher']),
+      );
+    }
+    return null;
+  }
+}
+
+class _Row {
+  const _Row({required this.codes, required this.slot, this.date, this.name, this.room, this.campus, this.lecturer});
+  final List<String> codes;
+  final (String, String) slot;
+  final DateTime? date;
+  final String? name, room, campus, lecturer;
 }
