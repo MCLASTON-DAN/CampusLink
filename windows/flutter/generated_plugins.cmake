@@ -4,8 +4,9 @@
 
 list(APPEND FLUTTER_PLUGIN_LIST
   app_links
-  share_plus
+  firebase_core
   url_launcher_windows
+  share_plus
 )
 
 list(APPEND FLUTTER_FFI_PLUGIN_LIST

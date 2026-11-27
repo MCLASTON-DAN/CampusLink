@@ -310,3 +310,12 @@ void showSnack(BuildContext context, String msg) {
     ..hideCurrentSnackBar()
     ..showSnackBar(SnackBar(content: Text(msg), behavior: SnackBarBehavior.floating));
 }
+
+
+/// Big-screen layout (side rail, grids) only on screens that are really wide.
+/// A tall phone can still report a wide width (browser "Desktop site", or a
+/// very small Display size setting); it keeps the phone layout.
+bool isWideLayout(BuildContext context, [double minWidth = 840]) {
+  final s = MediaQuery.sizeOf(context);
+  return s.width >= minWidth && s.width >= s.height * 0.75;
+}

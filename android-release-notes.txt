@@ -1,3 +1,1 @@
-Alerts now reach your phone even when CampusLink is closed
-Quiet hours and your alert choices still apply
-New alert type: replies and mentions
+Tall phones always get the phone layout, even with Desktop site or a small Display size

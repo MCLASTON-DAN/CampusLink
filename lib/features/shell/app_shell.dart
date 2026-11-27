@@ -2,6 +2,8 @@ import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 
+import '../../widgets/common.dart';
+
 import '../../core/theme.dart';
 import '../../data/providers.dart';
 
@@ -40,7 +42,7 @@ class AppShell extends ConsumerWidget {
 
   @override
   Widget build(BuildContext context, WidgetRef ref) {
-    final wide = MediaQuery.sizeOf(context).width >= 840;
+    final wide = isWideLayout(context);
     final demo = ref.watch(isDemoModeProvider);
 
     final body = Column(

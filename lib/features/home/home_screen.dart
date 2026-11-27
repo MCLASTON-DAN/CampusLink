@@ -375,7 +375,7 @@ class _ResponsiveRow extends StatelessWidget {
   final List<Widget> children;
   @override
   Widget build(BuildContext context) => LayoutBuilder(builder: (context, c) {
-        if (c.maxWidth >= 700) {
+        if (c.maxWidth >= 700 && isWideLayout(context, 700)) {
           final cols = c.maxWidth >= 1000 ? 3 : 2;
           const gap = 12.0;
           final w = (c.maxWidth - gap * (cols - 1)) / cols;
