@@ -8,7 +8,7 @@
 
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const ANON_KEY = Deno.env.get("SUPABASE_ANON_KEY")!;
-const APP_URL = Deno.env.get("CAMPUSLINK_APP_URL") ?? "https://campuslink.danmclaston.workers.dev";
+const APP_URL = Deno.env.get("CAMPUSLINK_APP_URL") ?? "https://campuslinks.online";
 const TZ = "Africa/Kampala";
 
 type Feed = {

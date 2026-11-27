@@ -14,7 +14,7 @@ class AppConfig {
   static const university = 'Cavendish University Uganda';
 
   /// Public web address and the always-latest Android download.
-  static const webUrl = 'https://campuslink.danmclaston.workers.dev';
+  static const webUrl = 'https://campuslinks.online';
   /// Public pages (plain HTML, also linked from Google's sign-in screen).
   static const privacyUrl = '$webUrl/privacy/';
   static const termsUrl = '$webUrl/terms/';

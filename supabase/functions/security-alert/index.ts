@@ -14,7 +14,7 @@
 const SUPABASE_URL = Deno.env.get("SUPABASE_URL")!;
 const SERVICE_KEY = Deno.env.get("SUPABASE_SERVICE_ROLE_KEY")!;
 const SENDER = { name: "CampusLink Security", email: "centient@campuslinks.online" };
-const APP_URL = "https://campuslink.danmclaston.workers.dev";
+const APP_URL = "https://campuslinks.online";
 
 type Claim = { event_id: string; email: string; name: string; device: string; at_text: string; ip: string | null; token: string };
 
