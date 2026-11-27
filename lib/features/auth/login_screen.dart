@@ -236,7 +236,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                 if (!demo) ...[
                   _GoogleButton(onPressed: _busy ? null : _google),
                   const SizedBox(height: 6),
-                  Text('Pick your school account, like od251945@students.cavendish.ac.ug',
+                  Text('Pick your school account, like ${SchoolEmail.example}',
                       textAlign: TextAlign.center, style: Theme.of(context).textTheme.bodySmall),
                   const SizedBox(height: 16),
                   Row(children: [
@@ -288,7 +288,7 @@ class _LoginScreenState extends ConsumerState<LoginScreen> with SingleTickerProv
                   autofillHints: const [AutofillHints.email],
                   decoration: InputDecoration(
                     labelText: demo ? 'Email' : 'School email',
-                    hintText: 'od251945@students.cavendish.ac.ug',
+                    hintText: SchoolEmail.example,
                     prefixIcon: const Icon(Icons.alternate_email),
                     helperText: _signup ? _emailHint : null,
                   ),

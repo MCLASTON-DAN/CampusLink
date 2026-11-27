@@ -171,7 +171,7 @@ class _EmailRulesAdminScreenState extends State<EmailRulesAdminScreen> {
                     decoration: const InputDecoration(
                         labelText: 'Pattern (optional)',
                         hintText: r'^[a-z]{2}[0-9]{6}$',
-                        helperText: r'^[a-z]{2}[0-9]{6}$ = 2 letters + 6 numbers, like od251945',
+                        helperText: r'^[a-z]{2}[0-9]{6}$ = 2 letters + 6 numbers, like xx123456',
                         helperMaxLines: 2),
                   ),
                 ],

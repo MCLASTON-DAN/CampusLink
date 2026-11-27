@@ -22,12 +22,12 @@ void main() {
 
   group('School email quick check', () {
     test('school emails pass', () {
-      expect(SchoolEmail.quickCheck('od251945@students.cavendish.ac.ug'), isNull);
-      expect(SchoolEmail.quickCheck('  OD251945@Students.Cavendish.ac.ug '), isNull);
+      expect(SchoolEmail.quickCheck('xx123456@students.cavendish.ac.ug'), isNull);
+      expect(SchoolEmail.quickCheck('  XX123456@Students.Cavendish.ac.ug '), isNull);
     });
     test('personal and broken emails are caught', () {
       expect(SchoolEmail.quickCheck('me@gmail.com'), contains('school email'));
-      expect(SchoolEmail.quickCheck('od251945@'), isNotNull);
+      expect(SchoolEmail.quickCheck('xx123456@'), isNotNull);
       expect(SchoolEmail.quickCheck(''), isNotNull);
     });
   });
@@ -36,7 +36,7 @@ void main() {
     test('rules', () {
       expect(PasswordRules.check('short1'), contains('8'));
       expect(PasswordRules.check('onlyletters'), contains('letters and numbers'));
-      expect(PasswordRules.check('od251945x1', email: 'od251945@students.cavendish.ac.ug'), contains('email'));
+      expect(PasswordRules.check('xx123456x1', email: 'xx123456@students.cavendish.ac.ug'), contains('email'));
       expect(PasswordRules.check('Password1'), contains('common'));
       expect(PasswordRules.check('password1'), contains('common'));
       expect(PasswordRules.check('blue-Mango-42'), isNull);

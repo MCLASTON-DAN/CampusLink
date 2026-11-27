@@ -45,7 +45,7 @@ class AccountApi {
   }
 
   Future<List<EmailType>> emailTypes() async {
-    if (!available) return const [EmailType('Cavendish University Uganda', 'students.cavendish.ac.ug', false, 'student', 'od251945@students.cavendish.ac.ug')];
+    if (!available) return const [EmailType('Cavendish University Uganda', 'students.cavendish.ac.ug', false, 'student', SchoolEmail.example)];
     final rows = await _db.rpc('allowed_email_types') as List;
     return [for (final r in rows) EmailType.fromMap(Map<String, dynamic>.from(r as Map))];
   }
@@ -465,15 +465,19 @@ class TutorOffer {
 
 /// Checks that need no internet. The database has the final say.
 class SchoolEmail {
+  /// The address shown as an example on screens. Made up on purpose: never a
+  /// real student's address (it follows the real format: 2 letters + 6 numbers).
+  static const example = 'xx123456@students.cavendish.ac.ug';
+
   /// Null when the email looks fine; otherwise what to fix.
   static String? quickCheck(String raw) {
     final e = raw.trim().toLowerCase();
     if (e.isEmpty) return 'Enter your school email.';
     final m = RegExp(r'^([a-z0-9._%+-]{1,64})@([a-z0-9-]+(\.[a-z0-9-]+)+)$').firstMatch(e);
-    if (m == null) return 'That email looks incomplete. Example: od251945@students.cavendish.ac.ug';
+    if (m == null) return 'That email looks incomplete. Example: ${SchoolEmail.example}';
     const personal = ['gmail.com', 'yahoo.com', 'outlook.com', 'hotmail.com', 'icloud.com', 'live.com', 'ymail.com', 'proton.me'];
     if (personal.contains(m.group(2))) {
-      return 'Use your school email, not a personal one. Example: od251945@students.cavendish.ac.ug';
+      return 'Use your school email, not a personal one. Example: ${SchoolEmail.example}';
     }
     return null;
   }
@@ -535,7 +539,7 @@ String friendlyAccountError(Object e) {
   final m = e.toString().toLowerCase();
   if (m.contains('campuslink_school_email_only') || m.contains('school email') ||
       (m.contains('database error saving new user'))) {
-    return 'Use your school email to join CampusLink, like od251945@students.cavendish.ac.ug. '
+    return 'Use your school email to join CampusLink, like ${SchoolEmail.example}. '
         'With Google, pick your school account, not a personal Gmail.';
   }
   if (m.contains('email logins are disabled') || m.contains('email_provider_disabled') || m.contains('signups not allowed')) {

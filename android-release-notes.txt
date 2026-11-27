@@ -1,3 +1,1 @@
-Exam timetables: official university files now import (any layout, all sheets)
-Shared papers (e.g. BIT110/DIT110) count for every programme
-Clear message for old .xls files
+Sign-in screens show a made-up example email instead of a real student's

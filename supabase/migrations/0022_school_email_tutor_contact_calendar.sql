@@ -25,7 +25,7 @@ create table if not exists public.institution_email_domains (
     check (domain ~ '^[a-z0-9]([a-z0-9-]*[a-z0-9])?(\.[a-z0-9]([a-z0-9-]*[a-z0-9])?)+$'),
   include_subdomains boolean not null default false,
   account_kind text not null default 'any' check (account_kind in ('student', 'staff', 'any')),
-  -- Optional rule for the part before @, e.g. '^[a-z]{2}[0-9]{6}$' for od251945.
+  -- Optional rule for the part before @, e.g. '^[a-z]{2}[0-9]{6}$' for xx123456.
   local_part_pattern text check (local_part_pattern is null or char_length(local_part_pattern) <= 100),
   example text check (example is null or char_length(example) <= 120),
   is_active boolean not null default true,
@@ -95,7 +95,7 @@ on conflict (name) do nothing;
 insert into public.institution_email_domains (institution_id, domain, include_subdomains, account_kind, example)
 select i.id, d.domain, d.subs, d.kind, d.example
 from public.institutions i,
-     (values ('students.cavendish.ac.ug', false, 'student', 'od251945@students.cavendish.ac.ug'),
+     (values ('students.cavendish.ac.ug', false, 'student', 'xx123456@students.cavendish.ac.ug'),
              ('cavendish.ac.ug', true, 'staff', 'name@cavendish.ac.ug')) as d(domain, subs, kind, example)
 where i.name = 'Cavendish University Uganda'
 on conflict (domain) do nothing;
