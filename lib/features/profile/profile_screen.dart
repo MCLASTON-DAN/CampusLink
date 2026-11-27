@@ -121,6 +121,7 @@ class ProfileScreen extends ConsumerWidget {
             ActionTile(icon: Icons.notifications_rounded, title: 'Notifications', subtitle: 'Inbox and pop-up settings', color: const Color(0xFFDB2777), onTap: () => context.push('/notifications')),
             ActionTile(icon: Icons.tune_rounded, title: 'Personalise', subtitle: 'Name, studies, topics, notifications, theme', color: const Color(0xFF7C3AED), onTap: () => context.push('/welcome/edit')),
             ActionTile(icon: Icons.event_available_rounded, title: 'My calendar', subtitle: 'Classes, exams and events in Google Calendar', color: const Color(0xFF0D9488), onTap: () => context.push('/account/calendar')),
+            ActionTile(icon: Icons.devices_rounded, title: 'Your devices', subtitle: 'Where you\'re signed in, and sign-in alerts', color: const Color(0xFF2563EB), onTap: () => context.push('/account/devices')),
             ActionTile(icon: Icons.password_rounded, title: 'Password', subtitle: 'Create or change your password', color: const Color(0xFF334155), onTap: () => openPasswordSettings(context)),
             if (user.isTutor)
               ActionTile(icon: Icons.payments_rounded, title: 'Price and contact', subtitle: 'What you charge, how students reach you', color: const Color(0xFF16A34A), onTap: () => context.push('/tutors/offer')),

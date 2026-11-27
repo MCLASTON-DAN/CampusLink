@@ -1,1 +1,3 @@
-Layout follows one clear set of screen sizes on every page; phones always get the phone layout
+Sign-in alerts: you're told each time your account is opened on a new sign-in
+New: Me > Your devices, see where you're signed in and sign any device out
+"This wasn't me" link in the alert email signs out every device

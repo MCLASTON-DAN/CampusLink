@@ -68,6 +68,8 @@ class _HostState extends ConsumerState<NotificationHost> {
     _sub?.cancel();
     _sub = null;
     if (userId == null) return;
+    // Name this phone for sign-in alerts and Your devices.
+    AccountApi.instance.nameThisDevice();
     _startPush();
     if (AccountApi.instance.available) {
       AccountApi.instance.settings().then((v) => _prefs = v).catchError((_) => _prefs);
@@ -197,6 +199,9 @@ class _NotificationsScreenState extends ConsumerState<NotificationsScreen> {
         'tutor' => Icons.school_rounded,
         'request' => Icons.support_agent_rounded,
         'office' => Icons.badge_rounded,
+        'security' => Icons.shield_rounded,
+        'social' => Icons.forum_rounded,
+        'group' => Icons.groups_rounded,
         _ => Icons.campaign_rounded,
       };
 

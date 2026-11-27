@@ -1,3 +1,5 @@
+import 'package:device_info_plus/device_info_plus.dart';
+import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:shared_preferences/shared_preferences.dart';
 import 'package:supabase_flutter/supabase_flutter.dart';
 
@@ -234,6 +236,43 @@ class AccountApi {
   }
 
   Future<void> cancelClosure() => _db.rpc('cancel_account_closure');
+
+  // ------------------------------------------------------------------
+  // Your devices (sign-ins)
+  // ------------------------------------------------------------------
+
+  /// Every place this account is signed in, this device first.
+  Future<List<SignedInDevice>> devices() async {
+    final rows = await _db.rpc('my_sessions') as List;
+    return [for (final r in rows) SignedInDevice.fromMap(Map<String, dynamic>.from(r as Map))];
+  }
+
+  /// Signs one other device out. It loses access within the hour at most
+  /// (when its current pass runs out) and can't renew it.
+  Future<void> signOutDevice(String id) => _db.rpc('end_session', params: {'p_id': id});
+
+  /// Signs out every device except this one. Returns how many.
+  Future<int> signOutOtherDevices() async => (await _db.rpc('end_other_sessions') as num).toInt();
+
+  /// Phone apps all look alike to the server, so the app tells it its model
+  /// ("Samsung SM-A515F") for sign-in alerts and Your devices.
+  Future<void> nameThisDevice() async {
+    if (!available || kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+    try {
+      final info = await DeviceInfoPlugin().androidInfo;
+      final maker = info.manufacturer.isEmpty ? '' : '${info.manufacturer[0].toUpperCase()}${info.manufacturer.substring(1)} ';
+      final label = '$maker${info.model}'.trim();
+      if (label.isNotEmpty) await _db.rpc('label_my_session', params: {'p_label': label});
+    } catch (_) {/* the alert then just says "the CampusLink app" */}
+  }
+
+  /// The "This wasn't me" button from the sign-in email. Works signed in or
+  /// out. Returns 'ok', 'done' (already used), 'expired' or 'invalid'.
+  Future<String> secureAccount(String token) async {
+    final r = await _db.functions.invoke('security-alert', body: {'secure': token});
+    final data = r.data;
+    return data is Map && data['result'] is String ? data['result'] as String : 'invalid';
+  }
 
   /// Removes your profile photo files now (not kept during the 30 days).
   Future<void> deleteMyPhotos() async {
@@ -568,4 +607,35 @@ class UserSettings {
     if (!kinds.contains(kind)) return false;
     return !isQuiet(now ?? DateTime.now());
   }
+}
+
+
+/// One place this account is signed in.
+class SignedInDevice {
+  const SignedInDevice({
+    required this.id,
+    required this.name,
+    required this.signedInAt,
+    required this.lastActiveAt,
+    this.ip,
+    this.isThisDevice = false,
+  });
+  final String id;
+  final String name;
+  final DateTime signedInAt;
+  final DateTime lastActiveAt;
+  final String? ip;
+  final bool isThisDevice;
+
+  bool get isApp => name.contains('CampusLink app');
+  bool get isPhone => isApp || name.contains('Android') || name.contains('iPhone');
+
+  factory SignedInDevice.fromMap(Map<String, dynamic> m) => SignedInDevice(
+        id: m['id'] as String,
+        name: (m['device'] as String?) ?? 'Unknown device',
+        signedInAt: DateTime.parse(m['signed_in_at'] as String).toLocal(),
+        lastActiveAt: DateTime.parse(m['last_active_at'] as String).toLocal(),
+        ip: m['ip'] as String?,
+        isThisDevice: m['current'] == true,
+      );
 }

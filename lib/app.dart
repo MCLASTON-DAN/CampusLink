@@ -18,6 +18,7 @@ import 'features/account/email_rules_admin.dart';
 import 'features/account/password_screens.dart';
 import 'features/account/tutor_offer.dart';
 import 'features/account/close_account.dart';
+import 'features/account/devices_screen.dart';
 import 'features/account/invite_screens.dart';
 import 'features/account/theme_mode.dart';
 import 'features/account/welcome_screen.dart';
@@ -67,6 +68,8 @@ final routerProvider = Provider<GoRouter>((ref) {
       final onLogin = loc == '/login';
       // Invite links open for anyone; the page itself handles signed-in people.
       if (loc.startsWith('/invite/')) return null;
+      // The "This wasn't me" page from a sign-in email works signed in or out.
+      if (loc.startsWith('/secure-account/')) return null;
       // Password reset pages work signed in or out: the reset itself signs you
       // in for a moment, and the profile may not have loaded yet.
       if (const {'/forgot-password', '/set-password'}.contains(state.matchedLocation)) return null;
@@ -91,6 +94,7 @@ final routerProvider = Provider<GoRouter>((ref) {
       GoRoute(path: '/welcome', builder: (_, __) => const WelcomeScreen()),
       GoRoute(path: '/account/closing', builder: (_, __) => const AccountClosingScreen()),
       GoRoute(path: '/invite/:token', builder: (_, s) => InviteScreen(token: s.pathParameters['token']!)),
+      GoRoute(path: '/secure-account/:token', builder: (_, s) => SecureAccountScreen(token: s.pathParameters['token']!)),
       ShellRoute(
         builder: (context, state, child) =>
             NotificationHost(
@@ -172,6 +176,7 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/admin/invites', builder: (_, __) => const InvitesAdminScreen()),
           GoRoute(path: '/welcome/edit', builder: (_, __) => const WelcomeScreen(editing: true)),
           GoRoute(path: '/account/close', builder: (_, __) => const CloseAccountScreen()),
+          GoRoute(path: '/account/devices', builder: (_, __) => const DevicesScreen()),
           GoRoute(path: '/update', builder: (_, __) => const UpdateDetailsScreen()),
           GoRoute(path: '/moderation', builder: (_, __) => const ModerationLogScreen()),
           GoRoute(path: '/reports', builder: (_, __) => const ReportsScreen()),
