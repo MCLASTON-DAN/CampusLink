@@ -53,12 +53,48 @@ class SocialApi {
       (await Supabase.instance.client.rpc('remind_announcement', params: {'p_id': id}) as num).toInt();
 }
 
-/// 👍 12 · ❤️ 3 … with the person's own choice highlighted.
+/// Names in the picker.
+const reactionNames = <String, String>{
+  'like': 'Like',
+  'love': 'Love',
+  'haha': 'Haha',
+  'wow': 'Wow',
+  'celebrate': 'Celebrate',
+  'sad': 'Sad',
+};
+
+/// What each reaction is called once chosen ("Liked", "Loved"…).
+const reactionWords = <String, String>{
+  'like': 'Liked',
+  'love': 'Loved',
+  'haha': 'Haha',
+  'wow': 'Wow',
+  'celebrate': 'Celebrated',
+  'sad': 'Sad',
+};
+
+/// The like button, used everywhere something can be reacted to.
+///
+/// Tap = like (or undo). Press and hold = pick ❤️ 😂 😮 🎉 😢.
+/// * full (post and event pages): "Like" button, the extra-reactions button and
+///   the breakdown ("👍❤️ 12").
+/// * [compact] (cards in lists): heart and count only, so a whole feed doesn't
+///   load a breakdown per card.
+/// The main button uses an icon, not an emoji, so it always shows even before
+/// the browser has downloaded its emoji font.
 class ReactionBar extends ConsumerStatefulWidget {
-  const ReactionBar({super.key, required this.targetType, required this.targetId, required this.likes, required this.liked});
+  const ReactionBar({
+    super.key,
+    required this.targetType,
+    required this.targetId,
+    required this.likes,
+    required this.liked,
+    this.compact = false,
+  });
   final String targetType, targetId;
   final int likes;
   final bool liked;
+  final bool compact;
   @override
   ConsumerState<ReactionBar> createState() => _ReactionBarState();
 }
@@ -74,7 +110,17 @@ class _ReactionBarState extends ConsumerState<ReactionBar> {
   void initState() {
     super.initState();
     _mine = widget.liked ? 'like' : null;
-    if (_api.live) _load();
+    if (_api.live && !widget.compact) _load();
+  }
+
+  @override
+  void didUpdateWidget(ReactionBar old) {
+    super.didUpdateWidget(old);
+    // A refreshed list brings new numbers.
+    if (old.likes != widget.likes || old.liked != widget.liked) {
+      _total = widget.likes;
+      _mine = widget.liked ? (_mine ?? 'like') : null;
+    }
   }
 
   Future<void> _load() async {
@@ -91,17 +137,23 @@ class _ReactionBarState extends ConsumerState<ReactionBar> {
 
   Future<void> _react(String emoji) async {
     if (_busy) return;
+    final before = _mine;
     setState(() => _busy = true);
     try {
+      final String? now;
       if (_api.live) {
-        await _api.react(widget.targetType, widget.targetId, emoji);
-        await _load();
+        now = await _api.react(widget.targetType, widget.targetId, emoji);
       } else {
-        final on = await ref.read(communityProvider).toggleLike(widget.targetType, widget.targetId);
-        setState(() => (_mine = on ? 'like' : null, _total = _total + (on ? 1 : -1)));
+        now = await ref.read(communityProvider).toggleLike(widget.targetType, widget.targetId) ? 'like' : null;
       }
+      if (!mounted) return;
+      setState(() {
+        _mine = now;
+        _total += (now != null ? 1 : 0) - (before != null ? 1 : 0);
+      });
+      if (_api.live && !widget.compact) await _load();
     } catch (e) {
-      if (mounted) showSnack(context, e.toString().contains('Visitors') ? 'Visitors can read but not react.' : 'Could not react. Try again.');
+      if (mounted) showSnack(context, e.toString().contains('Visitors') ? 'Visitors can read but not react.' : 'Could not react. Check your connection.');
     } finally {
       if (mounted) setState(() => _busy = false);
     }
@@ -115,41 +167,65 @@ class _ReactionBarState extends ConsumerState<ReactionBar> {
       context: context,
       position: RelativeRect.fromLTRB(pos.dx, pos.dy - 56, pos.dx + 300, pos.dy),
       items: [
-        PopupMenuItem(
-          enabled: false,
-          child: Row(mainAxisSize: MainAxisSize.min, children: [
-            for (final e in reactionEmojis.entries)
-              InkWell(
-                borderRadius: BorderRadius.circular(20),
-                onTap: () => Navigator.pop(context, e.key),
-                child: Padding(padding: const EdgeInsets.all(6), child: Text(e.value, style: const TextStyle(fontSize: 26))),
-              ),
-          ]),
-        ),
+        for (final e in reactionEmojis.entries)
+          PopupMenuItem(
+            value: e.key,
+            height: 44,
+            padding: const EdgeInsets.symmetric(horizontal: 12),
+            child: Row(children: [
+              Text(e.value, style: const TextStyle(fontSize: 22)),
+              const SizedBox(width: 10),
+              Text(reactionNames[e.key]!),
+            ]),
+          ),
       ],
     );
     if (chosen != null) _react(chosen);
   }
 
+  /// Heart for "like" or nothing yet, the chosen emoji otherwise.
+  Widget _icon(Color? color, double size) => _mine == null || _mine == 'like'
+      ? Icon(_mine == null ? Icons.favorite_border_rounded : Icons.favorite_rounded, size: size, color: color)
+      : Text(reactionEmojis[_mine] ?? '👍', style: TextStyle(fontSize: size - 2));
+
   @override
   Widget build(BuildContext context) {
     final c = Theme.of(context).colorScheme;
-    final top = _counts.take(3).map((x) => reactionEmojis[x.$1] ?? '👍').join();
-    return Row(mainAxisSize: MainAxisSize.min, children: [
-      Tooltip(
-        message: 'Tap to like, hold for more',
-        child: GestureDetector(
-          onLongPress: _pick,
-          child: TextButton.icon(
-            onPressed: () => _react(_mine ?? 'like'),
-            style: TextButton.styleFrom(foregroundColor: _mine == null ? null : c.primary),
-            icon: Text(_mine == null ? '👍' : reactionEmojis[_mine]!, style: TextStyle(fontSize: 18, color: _mine == null ? c.onSurfaceVariant : null)),
-            label: Text(_mine == null ? 'React' : 'Reacted'),
+    final small = Theme.of(context).textTheme.bodySmall;
+    final active = _mine == null ? null : Colors.redAccent;
+
+    if (widget.compact) {
+      return Semantics(
+        button: true,
+        label: _mine == null ? 'Like, $_total' : 'Unlike, $_total',
+        child: InkWell(
+          borderRadius: BorderRadius.circular(20),
+          onTap: _busy ? null : () => _react(_mine ?? 'like'),
+          onLongPress: _busy ? null : _pick,
+          child: Padding(
+            padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+            child: Row(mainAxisSize: MainAxisSize.min, children: [
+              _icon(active ?? small?.color, 18),
+              Text(' $_total', style: small),
+            ]),
           ),
         ),
+      );
+    }
+
+    final top = _counts.take(3).map((x) => reactionEmojis[x.$1] ?? '👍').join();
+    return Row(mainAxisSize: MainAxisSize.min, children: [
+      GestureDetector(
+        onLongPress: _busy ? null : _pick,
+        child: TextButton.icon(
+          onPressed: _busy ? null : () => _react(_mine ?? 'like'),
+          style: TextButton.styleFrom(foregroundColor: _mine == null ? c.onSurfaceVariant : Colors.redAccent),
+          icon: _icon(active, 20),
+          label: Text(_mine == null ? 'Like' : reactionWords[_mine] ?? 'Liked'),
+        ),
       ),
-      if (_api.live) IconButton(tooltip: 'More reactions', onPressed: _pick, icon: const Icon(Icons.add_reaction_outlined, size: 20)),
-      if (_total > 0) Text('${top.isEmpty ? '👍' : top} $_total', style: Theme.of(context).textTheme.bodyMedium),
+      if (_api.live) IconButton(tooltip: 'Other reactions', onPressed: _busy ? null : _pick, icon: const Icon(Icons.add_reaction_outlined, size: 20)),
+      if (_total > 0) Text(top.isEmpty ? '$_total' : '$top $_total', style: Theme.of(context).textTheme.bodyMedium),
     ]);
   }
 }

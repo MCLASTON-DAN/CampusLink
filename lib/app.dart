@@ -154,7 +154,10 @@ final routerProvider = Provider<GoRouter>((ref) {
           GoRoute(path: '/community', builder: (_, __) => const CommunityHubScreen()),
           GoRoute(path: '/news', builder: (_, __) => const NewsScreen()),
           GoRoute(path: '/news/new', builder: (_, __) => const ComposePostScreen()),
-          GoRoute(path: '/news/:id', builder: (_, s) => PostDetailScreen(postId: s.pathParameters['id']!)),
+          GoRoute(
+              path: '/news/:id',
+              builder: (_, s) => PostDetailScreen(
+                  postId: s.pathParameters['id']!, openComments: s.uri.queryParameters['comments'] == '1')),
           GoRoute(path: '/events', builder: (_, __) => const EventsListScreen()),
           GoRoute(path: '/events/new', builder: (_, __) => const ComposeEventScreen()),
           GoRoute(path: '/events/requests', builder: (_, __) => const MajorRequestsScreen()),

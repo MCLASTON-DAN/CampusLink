@@ -1,1 +1,3 @@
-CampusLink now lives at campuslinks.online
+Like posts straight from the news list (tap the heart; hold it for more reactions)
+Tap the comment icon on a card to jump to the comments
+Clearer Like button on posts and events

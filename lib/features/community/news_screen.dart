@@ -189,11 +189,18 @@ class PostCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: t.labelMedium)),
-                Icon(p.likedByMe ? Icons.favorite_rounded : Icons.favorite_border_rounded, size: 16,
-                    color: p.likedByMe ? Colors.redAccent : t.bodySmall?.color),
-                Text(' ${p.likes}  ', style: t.bodySmall),
-                Icon(Icons.mode_comment_outlined, size: 16, color: t.bodySmall?.color),
-                Text(' ${p.comments}', style: t.bodySmall),
+                ReactionBar(targetType: 'post', targetId: p.id, likes: p.likes, liked: p.likedByMe, compact: true),
+                InkWell(
+                  borderRadius: BorderRadius.circular(20),
+                  onTap: () => context.push('/news/${p.id}?comments=1'),
+                  child: Padding(
+                    padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 6),
+                    child: Row(mainAxisSize: MainAxisSize.min, children: [
+                      Icon(Icons.mode_comment_outlined, size: 18, color: t.bodySmall?.color, semanticLabel: 'Comments'),
+                      Text(' ${p.comments}', style: t.bodySmall),
+                    ]),
+                  ),
+                ),
               ]),
             ]),
           ),
@@ -225,13 +232,17 @@ class _KindPill extends StatelessWidget {
 }
 
 class PostDetailScreen extends ConsumerStatefulWidget {
-  const PostDetailScreen({super.key, required this.postId});
+  const PostDetailScreen({super.key, required this.postId, this.openComments = false});
   final String postId;
+
+  /// Opened from a card's comment button: scroll to the comments.
+  final bool openComments;
   @override
   ConsumerState<PostDetailScreen> createState() => _PostDetailState();
 }
 
 class _PostDetailState extends ConsumerState<PostDetailScreen> {
+  final _commentsKey = GlobalKey();
   Post? _post;
   bool _loading = true;
   int? _views; // only filled for the posting office and admins
@@ -250,6 +261,12 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
       _loading = false;
     });
     if (p == null) return;
+    if (widget.openComments) {
+      WidgetsBinding.instance.addPostFrameCallback((_) {
+        final ctx = _commentsKey.currentContext;
+        if (ctx != null) Scrollable.ensureVisible(ctx, duration: const Duration(milliseconds: 350), curve: Curves.easeOut);
+      });
+    }
     await api.recordView(p.id);
     try {
       final v = await api.viewCount(p.id);
@@ -322,7 +339,7 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
                   const SizedBox(height: 8),
                   Reactions(targetType: 'post', targetId: p.id, likes: p.likes, liked: p.likedByMe, canRemove: me?.isSuperAdmin ?? false, onRemoved: () => context.pop()),
                   const Divider(height: 28),
-                  CommentsSection(targetType: 'post', targetId: p.id),
+                  CommentsSection(key: _commentsKey, targetType: 'post', targetId: p.id),
                 ]),
     );
   }
