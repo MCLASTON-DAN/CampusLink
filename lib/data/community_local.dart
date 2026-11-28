@@ -501,6 +501,24 @@ class LocalCommunity implements CommunityApi {
   }
 
   @override
+  Future<Map<String, (int, bool)>> likeCounts(String targetType, List<String> ids) async {
+    final likes = (_s['likes'] as List).cast<String>();
+    return {
+      for (final id in ids)
+        id: (likes.where((l) => l.endsWith('|$targetType|$id')).length, likes.contains('${_me.id}|$targetType|$id')),
+    };
+  }
+
+  @override
+  Future<List<Liker>> likers(String targetType, String targetId) async {
+    final likes = (_s['likes'] as List).cast<String>().where((l) => l.endsWith('|$targetType|$targetId'));
+    return [
+      for (final l in likes.toList().reversed)
+        Liker(id: l.split('|').first, name: l.startsWith('${_me.id}|') ? _me.fullName : 'A student'),
+    ];
+  }
+
+  @override
   Future<void> report(String targetType, String targetId, String reason) async {
     if (reason.trim().length < 10) throw CommunityException('Tell us briefly what is wrong (10+ characters)');
     final reports = _list('reports');

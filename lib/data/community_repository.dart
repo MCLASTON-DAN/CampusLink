@@ -65,6 +65,12 @@ abstract class CommunityApi {
   Future<void> deleteComment(String id);
   /// Returns true when the item is now liked.
   Future<bool> toggleLike(String targetType, String targetId);
+
+  /// For each id: how many likes, and whether I liked it.
+  Future<Map<String, (int, bool)>> likeCounts(String targetType, List<String> ids);
+
+  /// Who liked something, newest first (anyone signed in may see this).
+  Future<List<Liker>> likers(String targetType, String targetId);
   Future<void> report(String targetType, String targetId, String reason);
   Future<List<Report>> openReports();
   /// Staff: close a report. actioned = the content was dealt with; false = dismissed.

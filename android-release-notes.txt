@@ -1,3 +1,4 @@
-Like posts straight from the news list (tap the heart; hold it for more reactions)
-Tap the comment icon on a card to jump to the comments
-Clearer Like button on posts and events
+Likes work like Instagram: tap the heart, double-tap a picture, tap the number to see who liked it
+Like comments with the small heart on the right
+Study group chat: hold a message to react 👍 ❤️ 😂 😮 😢 🙏, like WhatsApp
+Likes on your posts and comments are grouped into one alert

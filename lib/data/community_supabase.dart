@@ -331,6 +331,22 @@ class SupabaseCommunity implements CommunityApi {
       writeOnce.run('deleteComment|$id', () => _guard(() => _client.from('comments').delete().eq('id', id).eq('author_id', _uid)));
 
   @override
+  Future<Map<String, (int, bool)>> likeCounts(String targetType, List<String> ids) => ids.isEmpty
+      ? Future.value(const {})
+      : _guard(() async {
+          final rows = await _client.rpc('like_counts', params: {'p_type': targetType, 'p_ids': ids}) as List;
+          return {
+            for (final r in rows.cast<Map>()) '${r['target_id']}': ((r['likes'] as num).toInt(), r['liked'] == true),
+          };
+        });
+
+  @override
+  Future<List<Liker>> likers(String targetType, String targetId) => _guard(() async {
+        final rows = await _client.rpc('likers', params: {'p_type': targetType, 'p_id': targetId}) as List;
+        return [for (final r in rows) Liker.fromMap(Map<String, dynamic>.from(r as Map))];
+      });
+
+  @override
   Future<bool> toggleLike(String targetType, String targetId) => writeOnce.run(
       'like|$targetType|$targetId',
       () => _guard(() async {

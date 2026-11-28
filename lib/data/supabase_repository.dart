@@ -684,6 +684,12 @@ class SupabaseRepository implements CampusRepository {
   Future<void> pinGroupMessage(String messageId, {required bool pin}) => writeOnce.run('pin|$messageId|$pin',
       () => _client.rpc('pin_group_message', params: {'p_message': messageId, 'p_pin': pin}), toggle: true);
 
+  @override
+  Future<Map<String, String>> reactToMessage(String messageId, String emoji) async {
+    final r = await _client.rpc('react_to_message', params: {'p_message': messageId, 'p_emoji': emoji});
+    return {for (final e in ((r as Map?) ?? const {}).entries) '${e.key}': '${e.value}'};
+  }
+
   // Typing: a private channel only members may join (rules in 0020).
   final _typingChannels = <String, RealtimeChannel>{};
 

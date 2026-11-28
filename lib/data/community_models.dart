@@ -281,6 +281,21 @@ class Post {
       };
 }
 
+/// Someone who liked a post, event or comment.
+class Liker {
+  const Liker({required this.id, required this.name, this.username, this.badge, this.avatarPath});
+  final String id, name;
+  final String? username, badge, avatarPath;
+
+  factory Liker.fromMap(Map<String, dynamic> m) => Liker(
+        id: m['user_id'] as String,
+        name: (m['full_name'] as String?) ?? 'Someone',
+        username: m['username'] as String?,
+        badge: m['badge'] as String?,
+        avatarPath: m['avatar_path'] as String?,
+      );
+}
+
 class Comment {
   final String id;
   final String targetType; // post | event

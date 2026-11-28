@@ -19,6 +19,7 @@ import '../../widgets/media.dart';
 import '../../widgets/section.dart';
 import '../../core/image_tools.dart';
 import 'news_screen.dart';
+import 'social.dart';
 
 String countdownText(DateTime start, DateTime now) {
   final d = start.difference(now);
@@ -155,6 +156,7 @@ class EventDetailScreen extends ConsumerStatefulWidget {
 }
 
 class _EventDetailState extends ConsumerState<EventDetailScreen> {
+  final _likeKey = GlobalKey<LikeButtonState>();
   CampusEvent? _e;
   bool _loading = true;
   @override
@@ -188,7 +190,10 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
               ? const EmptyState(icon: Icons.search_off_rounded, title: 'Event not found')
               : PageBody(maxWidth: 760, children: [
                   if ((e.coverPath ?? '').isNotEmpty) ...[
-                    MediaBanner(coverUrl: e.coverPath, radius: 16, full: true),
+                    DoubleTapLike(
+                      onLike: () async => _likeKey.currentState?.like(),
+                      child: MediaBanner(coverUrl: e.coverPath, radius: 16, full: true),
+                    ),
                     const SizedBox(height: 16),
                   ],
                   if (e.isCancelled) RetractedBanner(word: 'Cancelled', by: e.publisherName, reason: e.cancelReason),
@@ -235,6 +240,7 @@ class _EventDetailState extends ConsumerState<EventDetailScreen> {
                             label: const Text('Join online'))),
                   const SizedBox(height: 8),
                   Reactions(
+                    likeKey: _likeKey,
                       targetType: 'event',
                       targetId: e.id,
                       likes: e.likes,

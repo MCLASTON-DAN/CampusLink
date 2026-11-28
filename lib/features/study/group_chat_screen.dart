@@ -12,6 +12,16 @@ import '../../data/repository.dart';
 import '../../widgets/common.dart';
 import '../../widgets/confirm_send.dart';
 
+/// The six chat reactions (WhatsApp's set). Stored by name, shown as emoji.
+const chatReactions = <String, String>{
+  'like': '👍',
+  'love': '❤️',
+  'haha': '😂',
+  'wow': '😮',
+  'sad': '😢',
+  'pray': '🙏',
+};
+
 final _membersProvider = FutureProvider.autoDispose.family((ref, String id) => ref.watch(repositoryProvider).groupMembers(id));
 final _asksProvider = FutureProvider.autoDispose.family((ref, String id) => ref.watch(repositoryProvider).groupJoinRequests(id));
 
@@ -125,6 +135,51 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
     }
   }
 
+  /// Adds, switches or removes my reaction; shows it at once, then keeps
+  /// what the server says.
+  Future<void> _react(GroupMessage m, String emoji, String? me) async {
+    if (me == null) return;
+    final before = m.reactions;
+    final guess = Map<String, String>.of(before);
+    guess[me] == emoji ? guess.remove(me) : guess[me] = emoji;
+    setState(() => _messages[m.id] = m.copyWith(reactions: guess));
+    try {
+      final now = await _repo.reactToMessage(m.id, emoji);
+      if (mounted) setState(() => _messages[m.id] = (_messages[m.id] ?? m).copyWith(reactions: now));
+    } catch (e) {
+      if (!mounted) return;
+      setState(() => _messages[m.id] = (_messages[m.id] ?? m).copyWith(reactions: before));
+      showSnack(context, '$e'.contains('Visitors') ? 'Visitors can read but not react.' : 'Could not react. Check your connection.');
+    }
+  }
+
+  /// Who reacted with what, like WhatsApp. Tap your own to remove it.
+  void _whoReacted(GroupMessage m, List<GroupMember> members, String? me) {
+    final names = {for (final x in members) x.id: x.name};
+    final rows = m.reactions.entries.toList()..sort((a, b) => a.key == me ? -1 : b.key == me ? 1 : 0);
+    showModalBottomSheet<void>(
+      useRootNavigator: true,
+      context: context,
+      showDragHandle: true,
+      builder: (sheet) => SafeArea(
+        child: ListView(shrinkWrap: true, children: [
+          for (final r in rows)
+            ListTile(
+              leading: Text(chatReactions[r.value] ?? '👍', style: const TextStyle(fontSize: 24)),
+              title: Text(r.key == me ? 'You' : (names[r.key] ?? 'A former member')),
+              subtitle: r.key == me ? const Text('Tap to remove') : null,
+              onTap: r.key != me
+                  ? null
+                  : () {
+                      Navigator.pop(sheet);
+                      _react(m, r.value, me);
+                    },
+            ),
+        ]),
+      ),
+    );
+  }
+
   Future<void> _actions(GroupMessage m, {required bool owner, required String? me}) async {
     final choice = await showModalBottomSheet<String>(
       useRootNavigator: true, // above the tab bar, never under it
@@ -132,6 +187,26 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
       showDragHandle: true,
       builder: (sheet) => SafeArea(
         child: Column(mainAxisSize: MainAxisSize.min, children: [
+          // WhatsApp-style quick reactions; mine is highlighted.
+          Padding(
+            padding: const EdgeInsets.fromLTRB(12, 0, 12, 8),
+            child: Row(mainAxisAlignment: MainAxisAlignment.spaceEvenly, children: [
+              for (final e in chatReactions.entries)
+                InkResponse(
+                  radius: 26,
+                  onTap: () => Navigator.pop(sheet, 'react:${e.key}'),
+                  child: Container(
+                    padding: const EdgeInsets.all(8),
+                    decoration: BoxDecoration(
+                      shape: BoxShape.circle,
+                      color: m.reactions[me] == e.key ? Theme.of(sheet).colorScheme.primaryContainer : null,
+                    ),
+                    child: Text(e.value, style: const TextStyle(fontSize: 28)),
+                  ),
+                ),
+            ]),
+          ),
+          const Divider(height: 1),
           ListTile(leading: const Icon(Icons.reply_rounded), title: const Text('Reply'), onTap: () => Navigator.pop(sheet, 'reply')),
           ListTile(leading: const Icon(Icons.copy_rounded), title: const Text('Copy'), onTap: () => Navigator.pop(sheet, 'copy')),
           if (owner)
@@ -146,6 +221,7 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
       ),
     );
     if (!mounted || choice == null) return;
+    if (choice.startsWith('react:')) return _react(m, choice.substring(6), me);
     try {
       switch (choice) {
         case 'reply':
@@ -297,7 +373,9 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
                                 mine: m.authorId == me,
                                 mentionsMe: m.mentionAll || m.mentions.contains(me),
                                 original: original,
+                                me: me,
                                 onLongPress: () => _actions(m, owner: owner, me: me),
+                                onReactionsTap: () => _whoReacted(m, members, me),
                               );
                               if (!newDay) return bubble;
                               return Column(children: [_DayHeader(day), bubble]);
@@ -357,18 +435,27 @@ class _GroupChatScreenState extends ConsumerState<GroupChatScreen> {
 }
 
 class _Bubble extends StatelessWidget {
-  const _Bubble({required this.m, required this.mine, required this.mentionsMe, required this.original, required this.onLongPress});
+  const _Bubble({
+    required this.m,
+    required this.mine,
+    required this.mentionsMe,
+    required this.original,
+    required this.me,
+    required this.onLongPress,
+    required this.onReactionsTap,
+  });
   final GroupMessage m;
   final bool mine, mentionsMe;
   final GroupMessage? original;
-  final VoidCallback onLongPress;
+  final String? me;
+  final VoidCallback onLongPress, onReactionsTap;
 
   @override
   Widget build(BuildContext context) {
     final s = Theme.of(context).colorScheme;
     final t = Theme.of(context).textTheme;
     final bg = mine ? s.primaryContainer : (mentionsMe ? s.tertiaryContainer : s.surfaceContainerHighest);
-    return Align(
+    final bubble = Align(
       alignment: mine ? Alignment.centerRight : Alignment.centerLeft,
       child: GestureDetector(
         onLongPress: m.deleted ? null : onLongPress,
@@ -402,6 +489,35 @@ class _Bubble extends StatelessWidget {
         ),
       ),
     );
+    if (m.deleted || m.reactions.isEmpty) return bubble;
+    // The little reaction badge under the bubble: most-used first, then the count.
+    final counts = <String, int>{};
+    for (final r in m.reactions.values) {
+      counts[r] = (counts[r] ?? 0) + 1;
+    }
+    final top = (counts.entries.toList()..sort((a, b) => b.value.compareTo(a.value))).take(3).map((e) => chatReactions[e.key] ?? '👍').join();
+    final mineReacted = me != null && m.reactions.containsKey(me);
+    return Column(crossAxisAlignment: mine ? CrossAxisAlignment.end : CrossAxisAlignment.start, children: [
+      bubble,
+      Transform.translate(
+        offset: const Offset(0, -6),
+        child: Padding(
+          padding: const EdgeInsets.symmetric(horizontal: 10),
+          child: Material(
+            color: mineReacted ? s.primaryContainer : s.surfaceContainerHigh,
+            shape: StadiumBorder(side: BorderSide(color: s.surface, width: 2)),
+            child: InkWell(
+              customBorder: const StadiumBorder(),
+              onTap: onReactionsTap,
+              child: Padding(
+                padding: const EdgeInsets.symmetric(horizontal: 8, vertical: 2),
+                child: Text(m.reactions.length > 1 ? '$top ${m.reactions.length}' : top, style: const TextStyle(fontSize: 14)),
+              ),
+            ),
+          ),
+        ),
+      ),
+    ]);
   }
 }
 

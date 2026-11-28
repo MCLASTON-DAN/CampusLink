@@ -189,7 +189,7 @@ class PostCard extends StatelessWidget {
               const SizedBox(height: 12),
               Row(children: [
                 Expanded(child: NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: t.labelMedium)),
-                ReactionBar(targetType: 'post', targetId: p.id, likes: p.likes, liked: p.likedByMe, compact: true),
+                LikeButton(targetType: 'post', targetId: p.id, likes: p.likes, liked: p.likedByMe, compact: true),
                 InkWell(
                   borderRadius: BorderRadius.circular(20),
                   onTap: () => context.push('/news/${p.id}?comments=1'),
@@ -243,6 +243,7 @@ class PostDetailScreen extends ConsumerStatefulWidget {
 
 class _PostDetailState extends ConsumerState<PostDetailScreen> {
   final _commentsKey = GlobalKey();
+  final _likeKey = GlobalKey<LikeButtonState>();
   Post? _post;
   bool _loading = true;
   int? _views; // only filled for the posting office and admins
@@ -290,7 +291,10 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
               ? const EmptyState(icon: Icons.search_off_rounded, title: 'Post not found')
               : PageBody(maxWidth: 760, children: [
                   if (MediaBanner.has(coverUrl: p.coverPath, videoUrl: p.videoUrl)) ...[
-                    MediaBanner(coverUrl: p.coverPath, videoUrl: p.videoUrl, radius: 16, full: true),
+                    DoubleTapLike(
+                      onLike: () async => _likeKey.currentState?.like(),
+                      child: MediaBanner(coverUrl: p.coverPath, videoUrl: p.videoUrl, radius: 16, full: true),
+                    ),
                     const SizedBox(height: 16),
                   ],
                   NameWithBadge(p.byline, badgeForKind(p.publisherKind), style: Theme.of(context).textTheme.titleSmall),
@@ -337,7 +341,7 @@ class _PostDetailState extends ConsumerState<PostDetailScreen> {
                         icon: const Icon(Icons.video_call_rounded),
                         label: const Text('Join meeting')),
                   const SizedBox(height: 8),
-                  Reactions(targetType: 'post', targetId: p.id, likes: p.likes, liked: p.likedByMe, canRemove: me?.isSuperAdmin ?? false, onRemoved: () => context.pop()),
+                  Reactions(likeKey: _likeKey, targetType: 'post', targetId: p.id, likes: p.likes, liked: p.likedByMe, canRemove: me?.isSuperAdmin ?? false, onRemoved: () => context.pop()),
                   const Divider(height: 28),
                   CommentsSection(key: _commentsKey, targetType: 'post', targetId: p.id),
                 ]),
@@ -355,7 +359,11 @@ class Reactions extends ConsumerStatefulWidget {
     required this.liked,
     this.canRemove = false,
     this.onRemoved,
+    this.likeKey,
   });
+
+  /// Lets a double-tap on the picture press the like button.
+  final GlobalKey<LikeButtonState>? likeKey;
   final String targetType, targetId;
   final int likes;
   final bool liked;
@@ -391,7 +399,7 @@ class _ReactionsState extends ConsumerState<Reactions> {
   Widget build(BuildContext context) {
     final api = ref.read(communityProvider);
     return Wrap(spacing: 8, crossAxisAlignment: WrapCrossAlignment.center, children: [
-      ReactionBar(targetType: widget.targetType, targetId: widget.targetId, likes: widget.likes, liked: widget.liked),
+      LikeButton(key: widget.likeKey, targetType: widget.targetType, targetId: widget.targetId, likes: widget.likes, liked: widget.liked),
       TextButton.icon(
         onPressed: () async {
           final r = await _ask('Why are you reporting this?', 10);

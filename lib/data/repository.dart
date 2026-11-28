@@ -101,6 +101,10 @@ abstract class CampusRepository {
   Future<void> sendGroupMessage(String groupId, String body, {String? replyTo, List<String> mentions, bool mentionAll});
   Future<void> deleteGroupMessage(String messageId);
   Future<void> pinGroupMessage(String messageId, {required bool pin});
+
+  /// WhatsApp-style reaction on a chat message: adds, switches, or removes
+  /// (same emoji again). Returns the message's reactions afterwards.
+  Future<Map<String, String>> reactToMessage(String messageId, String emoji);
   /// Names of members typing right now (private channel, members only).
   Stream<Set<String>> typingIn(String groupId);
   void sendTyping(String groupId);

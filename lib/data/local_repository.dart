@@ -499,7 +499,7 @@ class LocalRepository implements CampusRepository {
   @override
   Future<void> deleteGroupMessage(String messageId) async => _replace(messageId, (m) {
         if (m.authorId != _user?.id) throw Exception('You can only delete your own messages.');
-        return GroupMessage(id: m.id, groupId: m.groupId, authorId: m.authorId, authorName: m.authorName, body: m.body, deleted: true, createdAt: m.createdAt);
+        return m.copyWith(deleted: true, reactions: const {});
       });
 
   @override
@@ -508,9 +508,19 @@ class LocalRepository implements CampusRepository {
     if (m == null) return;
     if (_group(m.groupId)?.ownerId != _user?.id) throw Exception('Only the group owner pins messages.');
     if (pin && _msgs.where((x) => x.groupId == m.groupId && x.pinned).length >= 3) throw Exception('Up to 3 pinned messages. Unpin one first.');
-    _replace(messageId, (x) => GroupMessage(
-        id: x.id, groupId: x.groupId, authorId: x.authorId, authorName: x.authorName, body: x.body, replyTo: x.replyTo,
-        mentions: x.mentions, mentionAll: x.mentionAll, pinned: pin, createdAt: x.createdAt));
+    _replace(messageId, (x) => x.copyWith(pinned: pin));
+  }
+
+  @override
+  Future<Map<String, String>> reactToMessage(String messageId, String emoji) async {
+    final m = _msgs.where((x) => x.id == messageId).firstOrNull;
+    if (m == null || m.deleted) throw Exception('That message is gone.');
+    if (!_member(m.groupId)) throw Exception('Only members can react.');
+    final me = _user!.id;
+    final next = Map<String, String>.of(m.reactions);
+    next[me] == emoji ? next.remove(me) : next[me] = emoji;
+    _replace(messageId, (x) => x.copyWith(reactions: next));
+    return next;
   }
 
   @override

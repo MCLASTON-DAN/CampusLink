@@ -11,6 +11,7 @@ class GroupMessage {
     this.mentionAll = false,
     this.pinned = false,
     this.deleted = false,
+    this.reactions = const {},
     required this.createdAt,
   });
   final String id, groupId, authorId, authorName, body;
@@ -19,9 +20,15 @@ class GroupMessage {
   final bool mentionAll, pinned, deleted;
   final DateTime createdAt;
 
-  GroupMessage withName(String name) => GroupMessage(
-      id: id, groupId: groupId, authorId: authorId, authorName: name, body: body, replyTo: replyTo,
-      mentions: mentions, mentionAll: mentionAll, pinned: pinned, deleted: deleted, createdAt: createdAt);
+  /// Who reacted with what: user id -> 'like' | 'love' | 'haha' | 'wow' | 'sad' | 'pray'.
+  final Map<String, String> reactions;
+
+  GroupMessage copyWith({String? authorName, bool? pinned, bool? deleted, Map<String, String>? reactions}) => GroupMessage(
+      id: id, groupId: groupId, authorId: authorId, authorName: authorName ?? this.authorName, body: body, replyTo: replyTo,
+      mentions: mentions, mentionAll: mentionAll, pinned: pinned ?? this.pinned, deleted: deleted ?? this.deleted,
+      reactions: reactions ?? this.reactions, createdAt: createdAt);
+
+  GroupMessage withName(String name) => copyWith(authorName: name);
 
   factory GroupMessage.fromMap(Map<String, dynamic> m, {String name = ''}) => GroupMessage(
         id: m['id'] as String,
@@ -34,6 +41,9 @@ class GroupMessage {
         mentionAll: m['mention_all'] == true,
         pinned: m['pinned'] == true,
         deleted: m['deleted'] == true,
+        reactions: {
+          for (final e in ((m['reactions'] as Map?) ?? const {}).entries) '${e.key}': '${e.value}',
+        },
         createdAt: DateTime.parse(m['created_at'].toString()).toLocal(),
       );
 }
