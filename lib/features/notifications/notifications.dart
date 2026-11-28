@@ -68,8 +68,8 @@ class _HostState extends ConsumerState<NotificationHost> {
     _sub?.cancel();
     _sub = null;
     if (userId == null) return;
-    // Name this phone for sign-in alerts and Your devices.
-    AccountApi.instance.nameThisDevice();
+    // A device used before shouldn't trigger a sign-in alert.
+    AccountApi.instance.rememberThisDevice();
     _startPush();
     if (AccountApi.instance.available) {
       AccountApi.instance.settings().then((v) => _prefs = v).catchError((_) => _prefs);

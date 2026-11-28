@@ -40,7 +40,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
       true;
 
   Future<void> _signOut(SignedInDevice d) async {
-    if (!await _confirm('Sign out ${d.name}?', 'That device will need to sign in again to use your account.', 'Sign out')) {
+    if (!await _confirm('Sign out ${d.name}?', 'That device will need to sign in again, and it will no longer be remembered, so you\'ll get an alert if it does.', 'Sign out')) {
       return;
     }
     setState(() => _busy.add(d.id));
@@ -96,7 +96,7 @@ class _DevicesScreenState extends State<DevicesScreen> {
             final others = list.where((d) => !d.isThisDevice).toList();
             return PageBody(children: [
               Text(
-                'Everywhere your account is signed in. You get an alert each time it\'s opened on a new sign-in. '
+                'Everywhere your account is signed in. Devices you have used before are remembered; you get an alert when a new one signs in. '
                 'If you see a device you don\'t recognise, sign it out and secure your Google account or password.',
                 style: Theme.of(context).textTheme.bodyMedium,
               ),

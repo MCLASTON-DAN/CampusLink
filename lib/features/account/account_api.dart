@@ -1,3 +1,5 @@
+import 'dart:math';
+
 import 'package:device_info_plus/device_info_plus.dart';
 import 'package:flutter/foundation.dart' show kIsWeb, defaultTargetPlatform, TargetPlatform;
 import 'package:shared_preferences/shared_preferences.dart';
@@ -254,16 +256,33 @@ class AccountApi {
   /// Signs out every device except this one. Returns how many.
   Future<int> signOutOtherDevices() async => (await _db.rpc('end_other_sessions') as num).toInt();
 
-  /// Phone apps all look alike to the server, so the app tells it its model
-  /// ("Samsung SM-A515F") for sign-in alerts and Your devices.
-  Future<void> nameThisDevice() async {
-    if (!available || kIsWeb || defaultTargetPlatform != TargetPlatform.android) return;
+  static const _deviceCodeKey = 'campuslink.device.code';
+
+  /// Tells the server "this is a device you know" right after sign-in, so a
+  /// phone or browser that was used before doesn't trigger a sign-in alert
+  /// (like Google and banks). The secret code stays on this device and
+  /// survives sign-out; the server only keeps a scrambled copy of it.
+  /// On Android it also names the phone ("Tecno KF6") for alerts and Your devices.
+  Future<void> rememberThisDevice() async {
+    if (!available) return;
     try {
-      final info = await DeviceInfoPlugin().androidInfo;
-      final maker = info.manufacturer.isEmpty ? '' : '${info.manufacturer[0].toUpperCase()}${info.manufacturer.substring(1)} ';
-      final label = '$maker${info.model}'.trim();
-      if (label.isNotEmpty) await _db.rpc('label_my_session', params: {'p_label': label});
-    } catch (_) {/* the alert then just says "the CampusLink app" */}
+      final prefs = await SharedPreferences.getInstance();
+      var code = prefs.getString(_deviceCodeKey);
+      if (code == null || !RegExp(r'^[0-9a-f]{64}$').hasMatch(code)) {
+        final r = Random.secure();
+        code = [for (var i = 0; i < 32; i++) r.nextInt(256).toRadixString(16).padLeft(2, '0')].join();
+        await prefs.setString(_deviceCodeKey, code);
+      }
+      await _db.rpc('remember_device', params: {'p_code': code, 'p_label': await _phoneModel()});
+    } catch (_) {/* then the server falls back to the network check */}
+  }
+
+  static Future<String?> _phoneModel() async {
+    if (kIsWeb || defaultTargetPlatform != TargetPlatform.android) return null;
+    final info = await DeviceInfoPlugin().androidInfo;
+    final maker = info.manufacturer.isEmpty ? '' : '${info.manufacturer[0].toUpperCase()}${info.manufacturer.substring(1)} ';
+    final label = '$maker${info.model}'.trim();
+    return label.isEmpty ? null : label;
   }
 
   /// The "This wasn't me" button from the sign-in email. Works signed in or
